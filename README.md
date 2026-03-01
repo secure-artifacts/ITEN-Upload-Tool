@@ -94,3 +94,37 @@ npm run dev # 或 npm start
 ## AI 软件目录 & 审核（新）
 
 仓库已包含“AI 常用软件目录 + 审核”模块，提供软件目录展示、分类/搜索、管理员申请同步、软件审核等功能。请按照 [`docs/software-directory.md`](docs/software-directory.md) 的说明准备 Google Sheet 的三个分页（目录 / 申请 / 审核权限），并在设置中填写 Range、提交入口等信息。提交入口默认通过 Apps Script Web App 实现，如需自动补齐图标，可在表格中添加附带的脚本。
+
+## 如何发布新版本
+
+本项目使用 GitHub Actions 自动构建和发布。每次发布新版本只需要创建一个 Git Tag 并推送即可。
+
+### 发布步骤
+
+#### 1. 确保代码已提交并推送
+
+```bash
+git status
+git add .
+git commit -m "你的改动说明"
+git push origin main
+```
+
+#### 2. 创建版本 Tag 并触发自动构建
+
+```bash
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1
+```
+
+推送后，GitHub Actions 会自动构建 macOS + Windows 双平台、生成安全签名（Attestation）并创建 Release。
+
+#### 3. 如果构建失败
+
+```bash
+git tag -d v1.0.1
+git push origin :refs/tags/v1.0.1
+# 修复后重新创建
+git tag -a v1.0.1 -m "Release version 1.0.1"
+git push origin v1.0.1
+```
