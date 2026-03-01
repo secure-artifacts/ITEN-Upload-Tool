@@ -1,0 +1,341 @@
+/* ============================================
+   图片网格视图样式
+   ============================================ */
+
+/* 网格容器 */
+.slot-file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    padding: 4px;
+}
+
+/* 确保文件列表容器允许溢出 */
+.slot-file-list-wrapper {
+    overflow-y: auto;
+    overflow-x: visible;
+    /* 允许横向溢出 */
+}
+
+.slot-file-grid {
+    overflow: visible;
+    /* 允许预览窗口溢出 */
+    position: relative;
+}
+
+/* 网格项允许溢出 */
+.slot-grid-file-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: visible;
+    /* 重要:允许预览窗口溢出 */
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border: 1px solid #e2e8f0;
+}
+
+.slot-grid-file-item:hover {
+    /* 不使用transform,因为它会影响position:absolute的子元素 */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    z-index: 5;
+    border-color: #3b82f6;
+    border-width: 2px;
+}
+
+.slot-grid-file-item.selected {
+    outline: 3px solid #3b82f6;
+    outline-offset: -3px;
+}
+
+/* 缩略图容器 */
+.slot-grid-file-thumbnail-wrapper {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    /* 这里可以hidden,只裁剪缩略图 */
+    border-radius: 8px 8px 0 0;
+}
+
+/* 文件名显示在缩略图下方 */
+.slot-grid-file-name-display {
+    padding: 6px 8px;
+    font-size: 11px;
+    color: #475569;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: white;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+}
+
+/* 复选框 */
+.slot-grid-file-checkbox {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 10000;
+    /* 比预览窗口更高,确保可点击 */
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 4px;
+    padding: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.slot-grid-file-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #3b82f6;
+    margin: 0;
+}
+
+/* 鼠标在复选框上时,隐藏预览窗口 */
+.slot-grid-file-checkbox:hover~.slot-grid-file-preview {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* 预览窗口内不显示复选框和状态点 */
+.slot-grid-file-preview .slot-grid-file-checkbox,
+.slot-grid-file-preview .slot-grid-status-dot {
+    display: none !important;
+}
+
+/* 缩略图 */
+.slot-grid-file-thumbnail {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.slot-grid-file-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 文件类型徽章(非图片文件) */
+.slot-grid-file-badge {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* 状态点 */
+.slot-grid-status-dot {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    border: 2px solid white;
+    z-index: 10001;
+    /* 比预览窗口更高 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.slot-grid-status-dot.success {
+    background: #22c55e;
+}
+
+.slot-grid-status-dot.error {
+    background: #ef4444;
+}
+
+.slot-grid-status-dot.running {
+    background: #3b82f6;
+}
+
+.slot-grid-status-dot.pending {
+    background: #cbd5e1;
+}
+
+/* 悬停预览 - 使用fixed定位,确保可以超出软件窗口 */
+.slot-grid-file-preview {
+    position: fixed;
+    /* top和left由JavaScript直接设置 */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0s ease 0.2s;
+    z-index: 99999;
+    /* 非常高的z-index,确保在最上层 */
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    /* 恢复hidden,避免图片超出预览窗口 */
+    /* max-width和max-height由JavaScript动态设置 */
+    display: flex;
+    flex-direction: column;
+    /* 垂直布局:图片在上,信息在下 */
+}
+
+/* 显示预览窗口时允许交互 */
+.slot-grid-file-preview.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    /* 允许鼠标事件,可以点击视频播放 */
+    transition-delay: 0s, 0s;
+}
+
+/* 隐藏内联预览窗口(只使用全局预览窗口) */
+.slot-grid-file-item .slot-grid-file-preview {
+    display: none !important;
+}
+
+/* 添加小箭头指向缩略图 - 默认显示在下方时(箭头在顶部,指向上方) */
+.slot-grid-file-preview::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid white;
+    filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* 显示在上方时,箭头在底部,指向下方 */
+.slot-grid-file-preview[data-position="above"]::before {
+    top: auto;
+    bottom: -8px;
+    border-bottom: none;
+    border-top: 8px solid white;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* 预览图片区域 */
+.slot-grid-preview-image {
+    width: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    /* 自动占据可用空间 */
+    overflow: hidden;
+    /* 保持hidden配合圆角，但确保容器足够大 */
+    position: relative;
+}
+
+.slot-grid-preview-image img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    /* 关键：保持原始比例，等比缩放 */
+    display: block;
+}
+
+.slot-grid-preview-placeholder {
+    width: 100%;
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    font-size: 48px;
+    font-weight: 700;
+}
+
+/* 预览信息区域 */
+.slot-grid-preview-info {
+    padding: 12px 16px;
+    background: white;
+    max-height: 80px;
+    /* 限制最大高度,为图片留出更多空间 */
+    overflow-y: auto;
+    flex-shrink: 0;
+    /* 不被压缩 */
+}
+
+.slot-grid-preview-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 6px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.slot-grid-preview-rename {
+    font-size: 13px;
+    color: #64748b;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+/* 文件数量徽章 */
+.slot-file-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #f1f5f9;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 8px;
+}
+
+/* 极简模式下的网格优化 */
+.app-shell.minimalist-mode .slot-file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    /* 减小缩略图尺寸 */
+    gap: 4px;
+    /* 减小间距 */
+}
+
+.app-shell.minimalist-mode .slot-grid-file-item {
+    border-width: 1px;
+}
+
+.app-shell.minimalist-mode .slot-grid-file-name-display {
+    padding: 4px 6px;
+    font-size: 10px;
+}
+
+.app-shell.minimalist-mode .slot-grid-file-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+}
+
+.app-shell.minimalist-mode .slot-grid-status-dot {
+    width: 8px;
+    height: 8px;
+    border-width: 1.5px;
+}
+
+.app-shell.minimalist-mode .slot-grid-preview-name {
+    font-size: 12px;
+}
+
+.app-shell.minimalist-mode .slot-grid-preview-rename {
+    font-size: 11px;
+}
+
+/* 精简模式和正常模式使用相同的预览窗口逻辑,由JavaScript动态控制尺寸 */

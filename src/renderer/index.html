@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ITEN上传工具</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="grid-view-styles.css" />
+  <link rel="stylesheet" href="settings-sidebar.css" />
+  <link rel="stylesheet" href="gm-simple.css" />
+  <link rel="stylesheet" href="group-media.css" />
+  <link rel="stylesheet" href="media-browser.css" />
+  <link rel="stylesheet" href="daily-checkin.css" />
+</head>
+
+<body>
+  <div class="app-shell">
+    <!-- 极简模式下的返回按钮（固定在顶部）-->
+    <button id="minimalist-mode-toggle-minimal" class="minimalist-exit-btn" type="button" title="显示正常模式"
+      aria-label="显示正常模式" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
+    <header class="top-bar">
+      <nav class="panel-toolbar" aria-label="控制面板">
+        <div class="session-group">
+          <label class="session-field">
+            <span>提交人</span>
+            <input type="text" id="meta-submit" placeholder="输入姓名" />
+            <span id="user-status-hint" class="user-status-hint" hidden></span>
+          </label>
+          <div class="session-actions">
+            <button id="user-register-btn" class="secondary" hidden>📝 注册新用户</button>
+            <button id="authorize-btn" class="primary">登录 Google</button>
+            <span id="auth-status" class="status-pill">未授权</span>
+            <!-- 🔴 Profile 切换器 -->
+            <button id="profile-indicator" class="profile-indicator-btn" type="button" title="切换用户 Profile">
+              <span class="profile-avatar" id="profile-avatar">👤</span>
+              <span class="profile-name" id="profile-name-display">未选择</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="nav-tabs-header view-tabs" aria-label="功能面板切换" role="tablist">
+          <button type="button" class="view-tab" data-view="notice-board">📢 信息板</button>
+          <button type="button" id="view-tab-daily-checkin" class="view-tab active" data-view="daily-checkin"
+            style="color: #10b981;" aria-current="page">⏰ 每日打卡</button>
+          <button type="button" class="view-tab" data-view="upload">上传面板</button>
+          <button type="button" class="view-tab" data-view="my-review">我的审核</button>
+          <button type="button" id="view-tab-review" class="view-tab" data-view="review">总审核面板</button>
+          <button type="button" id="view-tab-group-media" class="view-tab" data-view="group-media" hidden>📁
+            组内媒体</button>
+
+          <button type="button" class="view-tab" data-view="settings">设置</button>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Header 收起/展开按钮（app-shell 层级，不在 header 内）-->
+    <button id="toggle-header" class="icon-btn header-toggle-btn" type="button" title="收起顶栏" aria-label="收起顶栏">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
+
+    <div class="view-stack">
+      <main class="view-container">
+        <!-- 信息板面板 -->
+        <section class="view-panel" data-view="notice-board">
+          <section class="panel notice-board-panel">
+            <div class="panel-header">
+              <h2>📢 重要信息</h2>
+              <div class="panel-actions">
+                <button id="refresh-notice-board" class="ghost" type="button">刷新内容</button>
+                <button id="open-notice-doc" class="ghost" type="button" hidden>在浏览器中打开</button>
+              </div>
+            </div>
+
+            <!-- 更新通知横幅 -->
+            <div class="notice-board-update-banner" id="notice-board-update-banner" hidden>
+              <div class="update-banner-icon">🔔</div>
+              <div class="update-banner-content">
+                <div class="update-banner-title">文档已更新</div>
+                <div class="update-banner-info" id="update-banner-info">
+                  <!-- 动态填充：文档名称 · 更新于 X 分钟前 -->
+                </div>
+              </div>
+              <button class="update-banner-dismiss" id="dismiss-update-banner" type="button">
+                知道了
+              </button>
+            </div>
+
+            <div class="notice-board-content" id="notice-board-content">
+              <div class="notice-board-placeholder">
+                <div class="notice-board-icon">📄</div>
+                <h3>未配置信息板文档</h3>
+                <p>请在设置中配置 Google 文档链接或 ID</p>
+                <ul class="notice-board-steps">
+                  <li>打开您的 Google 文档</li>
+                  <li>设置文档权限为"知道链接的任何人都可以查看"</li>
+                  <li>复制文档链接或从链接中提取文档 ID</li>
+                  <li>在设置页面的"信息板配置"中粘贴文档 ID</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view="upload">
+          <section class="panel" id="category-panel">
+            <div class="panel-header">
+              <h2>分类上传</h2>
+              <div class="panel-actions">
+                <div class="search-and-switch">
+                  <!-- 极简模式切换按钮 -->
+                  <button id="minimalist-mode-toggle-normal" class="icon-btn minimalist-toggle-btn" type="button"
+                    title="切换到极简模式" aria-label="切换到极简模式">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="9" y1="3" x2="9" y2="21"></line>
+                    </svg>
+                  </button>
+                  <input type="text" id="slot-search" class="slot-search" placeholder="搜索分类..." />
+                  <div class="view-switch">
+                    <button id="view-normal" class="ghost active">普通上传</button>
+                    <button id="view-review" class="ghost">提交审核</button>
+                  </div>
+                  <button id="minimalist-upload-btn" class="primary" type="button" style="display:none;">开始上传</button>
+                </div>
+                <button id="add-slot" class="secondary">添加分类</button>
+
+                <!-- 更多下拉菜单 -->
+                <div class="more-menu">
+                  <button id="more-menu-btn" class="ghost" type="button">
+                    更多
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <div class="more-menu-dropdown" id="more-menu-dropdown" hidden>
+                    <button class="more-menu-item" data-action="export">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      导出分类预设
+                    </button>
+                    <button class="more-menu-item" data-action="import">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      导入分类预设
+                    </button>
+                    <button class="more-menu-item" data-action="reset">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                      </svg>
+                      恢复默认分类
+                    </button>
+                    <div class="more-menu-divider"></div>
+                    <button class="more-menu-item" data-action="group">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                      </svg>
+                      按自定义分组
+                    </button>
+                    <button class="more-menu-item" data-action="sync">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                      </svg>
+                      同步入库分类
+                    </button>
+                    <div class="more-menu-divider"></div>
+                    <button class="more-menu-item" data-action="export-review">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      导出审核分类预设
+                    </button>
+                    <button class="more-menu-item" data-action="import-review">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      导入审核分类预设
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 隐藏的原始按钮 -->
+                <button id="toggle-slot-group" style="display:none"></button>
+                <button id="sync-categories" style="display:none"></button>
+                <button id="slot-preset-export" style="display:none"></button>
+                <button id="slot-preset-import" style="display:none"></button>
+                <button id="slot-preset-reset" style="display:none"></button>
+              </div>
+            </div>
+            <p class="muted">
+              每个分类可选择不同的模式（入库 / 自定义链接）、本地目录和图片名称，系统会根据设置自动上传到对应的云端文件夹。
+            </p>
+            <div id="slot-container" class="slot-grid"></div>
+          </section>
+          <!-- 极简模式下的悬浮上传按钮 -->
+          <button id="minimalist-upload-fab" class="primary" type="button"
+            style="position: fixed; right: 24px; bottom: 24px; z-index: 1200; display: none; box-shadow: 0 8px 20px rgba(0,0,0,0.18);">
+            开始上传
+          </button>
+
+          <section class="panel" id="upload-progress-panel">
+            <div class="panel-header upload-header">
+              <div class="upload-header-text">
+                <h2>上传进度</h2>
+                <div class="upload-switch-group">
+                  <label class="checkbox-field inline-switch" for="rename-local-files">
+                    <input type="checkbox" id="rename-local-files" />
+                  </label>
+                  <div class="inline-switch-text">
+                    <strong>上传时同步重命名本地文件</strong>
+                    <small>勾选后会在上传前将本地文件改名为最终入库名称。</small>
+                  </div>
+                </div>
+              </div>
+              <div class="panel-actions">
+                <button id="toggle-upload-progress" class="icon-btn upload-toggle-btn" type="button" title="隐藏上传细节"
+                  aria-label="隐藏上传细节">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <span id="upload-state" class="status-pill offline">空闲</span>
+                <div class="legacy-upload-controls">
+                  <button id="start-upload" class="primary">全部开始上传</button>
+                  <button id="pause-upload" class="ghost">暂停</button>
+                  <button id="resume-upload" class="ghost">继续</button>
+                  <button id="stop-upload" class="ghost danger">停止</button>
+                </div>
+              </div>
+            </div>
+            <div id="upload-progress-body">
+              <div id="upload-log" class="log"></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view="my-review">
+          <section class="panel" id="review-manage-panel">
+            <div class="panel-header">
+              <h2>管理我提交的审核</h2>
+              <div class="panel-actions review-manage-actions">
+                <label class="compact-field">
+                  <span>时间范围</span>
+                  <select id="my-review-range">
+                    <option value="today">当天</option>
+                    <option value="24h">24 小时内</option>
+                    <option value="2d">最近两天</option>
+                    <option value="3d">最近三天</option>
+                    <option value="7d">最近一周</option>
+                    <option value="10d" selected>最近十天</option>
+                    <option value="all">全部</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                </label>
+                <div class="custom-range" id="my-review-custom-range" hidden>
+                  <label class="compact-field">
+                    <span>开始日期</span>
+                    <input type="date" id="my-review-start" />
+                  </label>
+                  <label class="compact-field">
+                    <span>结束日期</span>
+                    <input type="date" id="my-review-end" />
+                  </label>
+                </div>
+                <label class="compact-field">
+                  <span>最多显示</span>
+                  <input type="number" id="my-review-limit" min="5" max="200" step="5" />
+                </label>
+                <label class="compact-field">
+                  <span>排序方式</span>
+                  <select id="my-review-sort-mode">
+                    <option value="priority" selected>按状态排序</option>
+                    <option value="date-desc">按提交时间（新→旧）</option>
+                    <option value="date-asc">按提交时间（旧→新）</option>
+                    <option value="category-asc">按分类（A→Z）</option>
+                    <option value="category-desc">按分类（Z→A）</option>
+                  </select>
+                </label>
+                <button id="my-review-reset" class="ghost">重置过滤</button>
+              </div>
+            </div>
+            <div id="my-review-summary" class="review-manage-summary"></div>
+            <p id="my-review-info" class="review-manage-info"></p>
+            <div id="my-review-list" class="review-list"></div>
+            <div id="my-review-pagination" class="review-pagination"></div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view="review">
+          <section class="panel" id="review-panel">
+            <div class="panel-header">
+              <h2>审核面板</h2>
+              <div class="panel-actions">
+                <button id="check-data-conflicts" class="ghost" style="color: #e67700;">检测差异</button>
+                <button id="refresh-review" class="ghost">刷新待审核</button>
+                <button id="sync-review" class="ghost">同步 Sheet 审批</button>
+                <label class="compact-field">
+                  <span>查看范围</span>
+                  <select id="review-range-mode">
+                    <option value="10d" selected>最近 10 天</option>
+                    <option value="all">全部</option>
+                  </select>
+                </label>
+                <label class="compact-field">
+                  <span>排序方式</span>
+                  <select id="review-sort-mode">
+                    <option value="priority" selected>按状态排序</option>
+                    <option value="date-desc">按提交时间（新→旧）</option>
+                    <option value="date-asc">按提交时间（旧→新）</option>
+                    <option value="category-asc">按分类（A→Z）</option>
+                    <option value="category-desc">按分类（Z→A）</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <p class="muted">支持直接在应用内审核，也可在 Sheet 中改状态为“通过”，然后点击“同步 Sheet 审批”自动入库。</p>
+            <div id="review-status-summary" class="review-manage-summary"></div>
+
+            <!-- 多批次批量操作工具栏 -->
+            <div id="multi-batch-toolbar" class="multi-batch-toolbar" hidden>
+              <div class="multi-batch-toolbar-left">
+                <label class="multi-batch-select-all-wrapper">
+                  <input type="checkbox" id="multi-batch-select-all" />
+                  <span>全选当前页</span>
+                </label>
+                <span id="multi-batch-count" class="multi-batch-count">已选 0 个批次</span>
+              </div>
+              <div class="multi-batch-toolbar-right">
+                <button id="multi-batch-approve" class="multi-batch-btn approve" disabled title="将选中批次内所有待审文件标记为合格">
+                  ✓ 批量合格
+                </button>
+                <button id="multi-batch-reject" class="multi-batch-btn reject" disabled title="将选中批次内所有待审文件标记为不合格">
+                  ✗ 批量不合格
+                </button>
+                <button id="multi-batch-store" class="multi-batch-btn store" disabled title="将选中批次内所有合格文件入库">
+                  📦 批量入库
+                </button>
+                <button id="multi-batch-cancel" class="multi-batch-btn cancel" title="取消选择">
+                  取消选择
+                </button>
+              </div>
+            </div>
+
+            <div id="review-list" class="review-list"></div>
+            <div id="review-pagination" class="review-pagination"></div>
+          </section>
+        </section>
+
+        <!-- 组内媒体面板 -->
+        <section class="view-panel full-width-view" data-view="group-media" hidden>
+          <div style="width: 100%; height: 100%; overflow-y: auto;">
+
+            <!-- 顶部工具栏 -->
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 24px 24px 0;">
+              <h2 style="margin: 0; font-size: 24px; font-weight: 600;">📁 组内媒体</h2>
+              <div style="display: flex; gap: 12px;">
+                <button id="gm-toggle-view-btn" class="primary">提交文件夹</button>
+                <button id="gm-refresh-btn" class="ghost">🔄 刷新</button>
+              </div>
+            </div>
+
+            <!-- 浏览视图（默认） -->
+            <div id="gm-browse-view" style="display: block;">
+              <div class="panel" style="padding: 0; border: none; box-shadow: none; background: transparent;">
+                <!-- 筛选工具栏 -->
+                <div
+                  style="display: flex; gap: 16px; margin-bottom: 12px; padding: 16px; background: #f8fafc; border-radius: 8px; position: sticky; top: 0; z-index: 20;">
+                  <input type="text" id="gm-search-input" placeholder="🔍 搜索文件..." title="搜索文件名、文件夹名、提交人、内容类型等"
+                    style="flex: 1;" />
+                  <span id="gm-search-status"
+                    style="align-self: center; font-size: 12px; color: #94a3b8; min-width: 90px;"></span>
+                  <select id="gm-filter-type">
+                    <option value="">全部类型</option>
+                    <option value="reels">Reels</option>
+                    <option value="sora">Sora</option>
+                    <option value="主耶稣图">主耶稣图</option>
+                    <option value="其他">其他</option>
+                  </select>
+                  <select id="gm-submitter-filter">
+                    <option value="all">全部提交人</option>
+                    <option value="mine">只看我提交的</option>
+                    <option value="others">只看他人</option>
+                  </select>
+                  <select id="gm-sort-by" style="margin-right: 0;">
+                    <option value="time-desc">最新提交</option>
+                    <option value="time-asc">最早提交</option>
+                    <option value="type">按类型</option>
+                  </select>
+                </div>
+
+                <!-- 媒体记录网格 -->
+                <div style="padding: 0 16px 12px 16px;">
+                  <div id="gm-media-grid" class="gm-media-grid">
+                    <!-- 动态生成媒体卡片 -->
+                  </div>
+                </div>
+
+                <!-- 目录树 + 内容区 -->
+                <div style="display: flex; gap: 12px; padding: 0 16px 16px; box-sizing: border-box;">
+                  <div id="gm-folder-tree"
+                    style="flex: 0 0 260px; max-width: 320px; border: 1px solid #e2e8f0; border-radius: 10px; background: white; padding: 10px; overflow-y: auto;">
+                    <div style="color:#94a3b8; text-align:center; padding: 20px;">请选择记录后显示目录</div>
+                  </div>
+                  <div style="flex: 1; min-width: 0;">
+                    <div id="gm-folder-breadcrumb" style="font-size: 13px; color: #475569; padding: 8px 0;"></div>
+                    <div id="gm-content-area">
+                      <!-- 动态内容：记录卡片或文件网格 -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 空状态 -->
+                <div id="gm-empty-state" class="empty-state" hidden>
+                  <div style="font-size: 64px; margin-bottom: 16px;">📁</div>
+                  <h3>暂无媒体记录</h3>
+                  <p>点击右上角"提交文件夹"按钮提交媒体</p>
+                </div>
+
+                <!-- 加载状态 -->
+                <div id="gm-loading-state" hidden style="text-align: center; padding: 60px;">
+                  <div
+                    style="width: 40px; height: 40px; margin: 0 auto 16px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;">
+                  </div>
+                  <p style="color: #64748b;">加载中...</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 提交文件夹弹窗 -->
+        <div id="gm-submit-modal" class="modal" hidden style="z-index: 200;">
+          <div class="modal-overlay"></div>
+          <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">
+              <h3>提交媒体文件夹</h3>
+              <button type="button" id="gm-close-submit-modal" class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body" style="padding: 16px;">
+              <form id="gm-submit-form">
+                <input type="hidden" id="gm-submit-submitter" />
+
+                <div class="grid two-cols" style="margin-bottom: 16px;">
+                  <label>
+                    <span>链接说明 <span class="required">*</span></span>
+                    <input type="text" id="gm-submit-admin" required placeholder="可填写来源/用途等说明" />
+                  </label>
+
+                  <label>
+                    <span>内容类型 <span class="required">*</span></span>
+                    <select id="gm-submit-content-type" required>
+                      <option value="">请选择</option>
+                      <option value="reels">Reels</option>
+                      <option value="sora">Sora</option>
+                      <option value="主耶稣图">主耶稣图</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="grid" style="margin-bottom: 16px;">
+                  <label>
+                    <span>文件夹链接 <span class="required">*</span></span>
+                    <input type="text" id="gm-submit-folder-link" required placeholder="粘贴 Google Drive 文件夹链接" />
+                    <small class="muted">从 Google Drive 复制文件夹的分享链接</small>
+                  </label>
+                </div>
+
+                <div class="grid" style="margin-bottom: 20px;">
+                  <label>
+                    <span>备注 <span class="muted">(可选)</span></span>
+                    <textarea id="gm-submit-notes" rows="3" placeholder="可填写补充说明、用途、注意事项等"></textarea>
+                  </label>
+                </div>
+
+                <div class="panel-actions" style="justify-content: flex-end;">
+                  <button type="button" id="gm-submit-cancel" class="ghost">取消</button>
+                  <button type="submit" class="primary">✓ 提交</button>
+                </div>
+              </form>
+
+              <!-- 提交成功提示 -->
+              <div id="gm-submit-result" hidden style="text-align: center; padding: 24px;">
+                <div
+                  style="width: 64px; height: 64px; margin: 0 auto 16px; background: #10b981; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold;">
+                  ✓</div>
+                <h3 style="margin: 0 0 8px 0; font-size: 20px;">提交成功！</h3>
+                <p id="gm-result-details" style="color: #64748b; margin: 0 0 24px 0;"></p>
+                <button type="button" id="gm-submit-another-btn" class="secondary">继续提交</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+
+
+        <!-- 每日打卡面板 -->
+        <section class="view-panel active" data-view="daily-checkin" id="daily-checkin-panel">
+          <div id="daily-checkin-content">
+            <!-- 由 daily-checkin.js 动态渲染 -->
+            <div style="text-align: center; padding: 60px; color: #94a3b8;">
+              <div style="font-size: 48px; margin-bottom: 16px;">⏰</div>
+              <h3 style="margin: 0 0 8px; color: #64748b;">每日打卡</h3>
+              <p>正在加载...</p>
+            </div>
+          </div>
+        </section>
+
+
+
+        <section class="view-panel" data-view="settings">
+          <!-- 设置页面侧边栏布局 -->
+          <div class="settings-layout">
+            <!-- 全局配置工具栏 -->
+            <div class="settings-global-toolbar">
+              <h2>应用设置</h2>
+              <div class="settings-global-actions">
+                <button id="reset-all-config" class="ghost danger" type="button">恢复所有默认</button>
+                <button id="save-config" class="ghost">保存配置</button>
+                <button id="import-config" class="ghost">导入配置</button>
+                <button id="export-config" class="ghost">导出配置</button>
+                <button id="export-team-config-btn" class="ghost" style="color:#6366f1" type="button">📤 导出团队配置</button>
+              </div>
+            </div>
+
+            <div class="settings-main">
+              <!-- 左侧导航 -->
+              <nav class="settings-sidebar">
+                <button class="settings-nav-item active" data-settings-tab="basic">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"></path>
+                    <path
+                      d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z">
+                    </path>
+                  </svg>
+                  <span>基础配置</span>
+                </button>
+                <button class="settings-nav-item" data-settings-tab="notice-board">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span>信息板配置</span>
+                </button>
+                <button class="settings-nav-item" data-settings-tab="naming">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                  </svg>
+                  <span>命名规则</span>
+                </button>
+                <button class="settings-nav-item" data-settings-tab="ai-naming">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                    <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                    <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                  </svg>
+                  <span>AI 命名</span>
+                </button>
+                <button class="settings-nav-item" data-settings-tab="notification">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <span>通知与身份</span>
+                </button>
+              </nav>
+
+              <!-- 右侧内容区 -->
+              <div class="settings-content">
+                <section class="settings-panel active" data-settings-panel="basic">
+                  <section class="panel" id="basic-config-panel">
+                    <div class="panel-header">
+                      <h2>基础配置</h2>
+                      <div class="panel-actions">
+                        <button id="reset-basic-config" class="ghost danger" type="button">恢复默认</button>
+                      </div>
+                    </div>
+                    <div class="settings-group-grid"
+                      style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:16px;">
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">账户与连接</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label>
+                            <span>Client ID</span>
+                            <input type="text" id="client-id" placeholder="xxxx.apps.googleusercontent.com" />
+                          </label>
+                          <label>
+                            <span>Client Secret</span>
+                            <input type="password" id="client-secret" placeholder="应用密钥" />
+                          </label>
+                          <label>
+                            <span>本地回调端口</span>
+                            <input type="number" id="redirect-port" min="1024" max="65535" />
+                          </label>
+                          <label class="inline">
+                            <span>Drive 目标文件夹 ID</span>
+                            <div class="inline-field">
+                              <input type="text" id="drive-folder-id" placeholder="可在 Drive 链接中找到" />
+                              <button id="open-drive" class="ghost">打开</button>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#fef7f0; border:1px solid #fed7aa; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">🔥 Firebase 实时数据库</div>
+                        <p style="font-size:12px; color:#64748b; margin:0 0 10px;">配置团队的 Firebase 项目以启用打卡和实时同步功能。</p>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label>
+                            <span>API Key</span>
+                            <input type="text" id="firebase-api-key" placeholder="AIzaSy..." />
+                          </label>
+                          <label>
+                            <span>Auth Domain</span>
+                            <input type="text" id="firebase-auth-domain" placeholder="your-project.firebaseapp.com" />
+                          </label>
+                          <label>
+                            <span>Database URL</span>
+                            <input type="text" id="firebase-database-url"
+                              placeholder="https://your-project-default-rtdb.firebaseio.com" />
+                          </label>
+                          <label>
+                            <span>Project ID</span>
+                            <input type="text" id="firebase-project-id" placeholder="your-project-id" />
+                          </label>
+                        </div>
+                        <details style="margin-top:10px; font-size:12px; color:#64748b;">
+                          <summary style="cursor:pointer; font-weight:500; color:#ea580c;">📖 如何获取 Firebase 配置？
+                          </summary>
+                          <ol style="margin:8px 0 0; padding-left:20px; line-height:1.8;">
+                            <li>打开 <a href="https://console.firebase.google.com/" target="_blank"
+                                style="color:#6366f1">Firebase Console</a></li>
+                            <li>点击「添加项目」，输入项目名称，按提示完成创建</li>
+                            <li>进入项目后，点击左侧齿轮 ⚙️ →「项目设置」</li>
+                            <li>在「常规」标签页底部的「您的应用」区域，点击 Web 图标 <code>&lt;/&gt;</code> 添加 Web 应用</li>
+                            <li>注册应用后，会显示 <code>firebaseConfig</code> 对象，从中复制：
+                              <ul style="margin:4px 0; list-style:disc; padding-left:16px;">
+                                <li><strong>apiKey</strong> → API Key</li>
+                                <li><strong>authDomain</strong> → Auth Domain</li>
+                                <li><strong>databaseURL</strong> → Database URL（需先启用 Realtime Database）</li>
+                                <li><strong>projectId</strong> → Project ID</li>
+                              </ul>
+                            </li>
+                            <li>在左侧菜单 →「构建」→「Realtime Database」→「创建数据库」（选择区域后启动）</li>
+                            <li>在左侧菜单 →「构建」→「Authentication」→「开始」→ 启用「Google」登录方式</li>
+                          </ol>
+                        </details>
+                      </div>
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">界面与下载</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label>
+                            <span>界面缩放（0.70 - 1.30）</span>
+                            <div class="range-field">
+                              <input type="range" id="zoom-factor" min="0.7" max="1.3" step="0.01" />
+                              <span id="zoom-factor-display" class="range-value">100%</span>
+                              <button type="button" id="reset-zoom" class="ghost compact">重置</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>媒体下载目录</span>
+                            <div class="inline-field">
+                              <input type="text" id="media-download-dir" placeholder="默认：~/Downloads/ITEN媒体" />
+                              <button id="media-download-dir-pick" class="ghost" type="button">选择目录</button>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">缩略图缓存</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label class="inline">
+                            <span>缩略图缓存</span>
+                            <div class="inline-field">
+                              <span id="thumb-cache-info" class="muted">-</span>
+                              <button id="thumb-cache-all" class="ghost" type="button">全部缓存</button>
+                              <button id="thumb-cache-clean" class="ghost" type="button">清理缓存</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>缩略图缓存上限 (MB)</span>
+                            <div class="inline-field">
+                              <input type="number" id="thumb-cache-max" min="100" step="100" placeholder="例如 2048" />
+                              <button id="thumb-cache-max-save" class="ghost" type="button">保存</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>缩略图缓存目录</span>
+                            <div class="inline-field">
+                              <input type="text" id="thumb-cache-dir" placeholder="默认应用缓存目录" />
+                              <button id="thumb-cache-dir-pick" class="ghost" type="button">选择目录</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>自动预缓存</span>
+                            <div class="inline-field">
+                              <label style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="enable-prefetch" style="width:14px; height:14px;"> 索引更新时自动缓存
+                              </label>
+                            </div>
+                            <small class="muted">索引更新时自动在后台下载所有缩略图,提升浏览速度</small>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">文件索引与刷新</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label class="inline">
+                            <span>文件索引</span>
+                            <div class="inline-field">
+                              <span id="file-index-info" class="muted">-</span>
+                              <button id="file-index-refresh" class="ghost" type="button">刷新索引</button>
+                              <button id="file-index-clear" class="ghost danger" type="button">清空索引</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>索引刷新间隔（分钟）</span>
+                            <div class="inline-field">
+                              <input type="number" id="file-index-interval" min="5" step="5" placeholder="默认 15" />
+                              <button id="file-index-interval-save" class="ghost" type="button">保存</button>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>刷新策略</span>
+                            <div class="inline-field">
+                              <label style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="index-refresh-timer" style="width:14px; height:14px;"> 开启定时刷新
+                              </label>
+                              <label style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="folder-force-refresh" style="width:14px; height:14px;">
+                                打开目录时强制刷新
+                              </label>
+                            </div>
+                          </label>
+                          <label class="inline">
+                            <span>索引/搜索状态</span>
+                            <div class="inline-field">
+                              <div
+                                style="width: 220px; position: relative; height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden;">
+                                <div id="index-progress-bar"
+                                  style="position:absolute; inset:0; width:0%; background:#3b82f6; transition: width 0.2s ease;">
+                                </div>
+                              </div>
+                              <span id="index-progress-text" class="muted"
+                                style="min-width:100px; display:inline-block;">—</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">入库表格与分区</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label>
+                            <span>入库表格 ID 或链接</span>
+                            <input type="text" id="sheet-id" placeholder="粘贴 ID 或 https://docs.google.com/..." />
+                          </label>
+                          <label>
+                            <span>默认审核临时云端链接</span>
+                            <input type="text" id="review-temp-id" placeholder="Drive 文件夹链接或 ID" />
+                          </label>
+                          <label>
+                            <span>普通入库登记分页</span>
+                            <input type="text" id="sheet-range" placeholder="如：Uploads!A:G" />
+                          </label>
+                          <label>
+                            <span>提交审核登记分页</span>
+                            <input type="text" id="review-range" placeholder="如：审核记录!A:Q" />
+                          </label>
+                          <label>
+                            <span>入库分类数据读取分页</span>
+                            <input type="text" id="category-range" placeholder="如：数据验证!A2:C" />
+                          </label>
+                          <label>
+                            <span>按文件审核登记分页</span>
+                            <input type="text" id="file-review-range" placeholder="如：文件审核!A:Z" />
+                          </label>
+                        </div>
+                      </div>
+
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">软件更新</div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <span id="updater-status-text" class="muted">正在获取版本信息...</span>
+                            <button id="check-update-btn" class="secondary compact">检查更新</button>
+                          </div>
+                          <div id="update-info-area" hidden>
+                            <div id="update-message"
+                              style="font-size:12px; margin-bottom:8px; line-height:1.5; color:#475569;"></div>
+                            <div class="update-actions" style="display:flex; gap:8px; align-items:center;">
+                              <button id="download-update-btn" class="primary compact" hidden>⬇️ 下载更新</button>
+                              <button id="install-update-btn" class="primary compact" hidden
+                                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🚀 重启并安装</button>
+                            </div>
+                            <div id="update-progress-container" hidden style="margin-top:12px;">
+                              <div
+                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="font-size:12px; color:#475569;">下载进度</span>
+                                <span id="update-progress-percent"
+                                  style="font-size:12px; font-weight:600; color:#3b82f6;">0%</span>
+                              </div>
+                              <div id="update-progress-bar"
+                                style="height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden;">
+                                <div id="update-progress-fill"
+                                  style="width:0%; height:100%; background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%); border-radius:4px; transition:width 0.2s;">
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <!-- 开机自启动设置 -->
+                          <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 4px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                              <input type="checkbox" id="open-at-login-checkbox" style="width:16px; height:16px;">
+                              <span style="font-size:13px; color:#475569;">开机时自动启动软件</span>
+                            </label>
+                            <small class="muted"
+                              style="margin-left:24px; display:block; margin-top:4px;">启用后，电脑开机时会自动运行本软件</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </section>
+
+                <section class="settings-panel" data-settings-panel="notice-board">
+                  <section class="panel" id="notice-board-config-panel">
+                    <div class="panel-header">
+                      <h2>📢 信息板配置</h2>
+                    </div>
+                    <p class="muted">在信息板中展示 Google 文档的内容，可用于显示重要通知、留言、记录等。文档需要设置为"知道链接的任何人都可以查看"。</p>
+                    <div class="grid two-cols">
+                      <label>
+                        <span>信息板文档 ID</span>
+                        <input type="text" id="notice-board-doc-id" placeholder="粘贴 Google 文档 ID 或完整链接" />
+                        <small>从文档链接中提取 ID，如：https://docs.google.com/document/d/<strong>1abc...XYZ</strong>/edit</small>
+                      </label>
+                      <label>
+                        <span>默认状态</span>
+                        <select id="notice-board-auto-open">
+                          <option value="true">启动时自动打开信息板</option>
+                          <option value="false">启动时显示上传面板</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+                </section>
+
+                <section class="settings-panel" data-settings-panel="naming">
+                  <section class="panel" id="naming-panel">
+                    <div class="panel-header">
+                      <h2>命名规则</h2>
+                      <div class="panel-actions">
+                        <button id="reset-naming-config" class="ghost danger" type="button">恢复默认</button>
+                      </div>
+                    </div>
+                    <div class="naming-preview-row">
+                      <span>命名预览</span>
+                      <div id="naming-preview" class="preview-chip">国家-日期-软件-图片名称-提交人-管理员-序号</div>
+                    </div>
+                    <div class="naming-layout">
+                      <section class="naming-section stretch">
+                        <div class="custom-text-config">
+                          <div class="custom-text-header">
+                            <h3>自定义文本块</h3>
+                            <button id="add-custom-text" class="ghost">新增文本块</button>
+                          </div>
+                          <p class="muted">
+                            随着命名块一起使用。通用文本块在此统一填写，分类专用文本块将在每个分类卡片中单独填写。
+                          </p>
+                          <div id="custom-text-list"></div>
+                        </div>
+                      </section>
+                    </div>
+                    <div class="naming-layout dual">
+                      <section class="naming-section">
+                        <header>
+                          <h3>文件命名块</h3>
+                          <p>拖拽排列顺序，右侧可快速插入常用占位符。</p>
+                        </header>
+                        <div class="token-config compact">
+                          <div>
+                            <div id="token-builder" class="token-builder" data-role="builder"></div>
+                            <input type="hidden" id="rename-pattern" />
+                          </div>
+                          <div class="token-toolbar">
+                            <div class="token-buttons" id="token-buttons"></div>
+                          </div>
+                        </div>
+                        <div class="naming-presets-config">
+                          <div class="naming-presets-header">
+                            <h3>文件命名规则预设</h3>
+                            <div class="naming-presets-actions">
+                              <input type="text" id="naming-preset-name" placeholder="预设名称（如：灾难图命名）" />
+                              <button id="add-naming-preset" class="ghost">保存当前规则</button>
+                            </div>
+                          </div>
+                          <p class="muted">
+                            默认使用通用命名规则。可在这里保存当前模式为预设，再在分类中单独选择。
+                          </p>
+                          <div id="naming-preset-list"></div>
+                        </div>
+                      </section>
+                      <section class="naming-section">
+                        <header>
+                          <h3>云端文件夹命名</h3>
+                          <p>自动为 Drive 子目录命名，可与文件命名保持一致。</p>
+                        </header>
+                        <div class="token-config compact">
+                          <div>
+                            <div id="folder-token-builder" class="token-builder" data-role="folder-builder"></div>
+                            <input type="hidden" id="folder-pattern" />
+                          </div>
+                          <div class="token-toolbar">
+                            <div class="token-buttons" id="folder-token-buttons"></div>
+                          </div>
+                        </div>
+                        <div class="naming-presets-config">
+                          <div class="naming-presets-header">
+                            <h3>云端文件夹命名预设</h3>
+                            <div class="naming-presets-actions">
+                              <input type="text" id="folder-preset-name" placeholder="预设名称（如：事件目录）" />
+                              <button id="add-folder-preset" class="ghost">保存当前规则</button>
+                            </div>
+                          </div>
+                          <p class="muted">
+                            默认可选择系统内置规则，亦可自定义匹配当前 token 组合。
+                          </p>
+                          <div id="folder-preset-list"></div>
+                        </div>
+                      </section>
+                    </div>
+                    <div class="naming-layout">
+                      <section class="naming-section stretch">
+                        <details class="naming-advanced" open>
+                          <summary>高级参数（日期、序号、地区等）</summary>
+                          <div class="grid three-cols">
+                            <label>
+                              <span>日期格式</span>
+                              <input type="text" id="date-format" />
+                              <small>示例：YYYYMMDD-hhmmss</small>
+                            </label>
+                            <label>
+                              <span>序号设置</span>
+                              <div class="inline-field">
+                                <input type="number" id="counter-start" min="0" />
+                                <input type="number" id="counter-padding" min="1" max="6" />
+                              </div>
+                              <small>起始值 / 位数</small>
+                            </label>
+                            <label>
+                              <span>序号步长</span>
+                              <input type="number" id="counter-step" min="1" />
+                            </label>
+                            <label>
+                              <span>时间基准</span>
+                              <select id="timezone">
+                                <option value="local">本地时间</option>
+                                <option value="utc">UTC</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>国家 / 地区</span>
+                              <input type="text" id="name-country" placeholder="如：IT、CN" />
+                            </label>
+                            <label>
+                              <span>命名日期 / 完成日期</span>
+                              <input type="date" id="name-date" />
+                              <input type="hidden" id="meta-complete" />
+                              <small>自动转成 20240918 格式，用于表格完成日期</small>
+                            </label>
+                            <label>
+                              <span>软件 / 工具缩写</span>
+                              <input type="text" id="name-software" placeholder="如：MJ" />
+                            </label>
+                          </div>
+                        </details>
+                      </section>
+                    </div>
+                  </section>
+                </section>
+
+                <section class="settings-panel" data-settings-panel="ai-naming">
+                  <section class="panel" id="ai-naming-panel">
+                    <div class="panel-header">
+                      <div>
+                        <h2>AI 智能命名</h2>
+                        <p class="panel-subtitle">使用 AI 视觉模型分析图片内容，从你的关键词词库中自动匹配最相关的关键词追加到文件名。</p>
+                      </div>
+                    </div>
+
+                    <div class="settings-group-grid" style="display:grid; grid-template-columns: 1fr; gap:16px;">
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div
+                          style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                          <div style="font-weight:600; color:#0f172a;">AI 命名增强</div>
+                          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="checkbox" id="ai-naming-enabled" style="width:16px; height:16px;" />
+                            <span style="font-size:13px; color:#475569;">启用</span>
+                          </label>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                          <label>
+                            <span>Gemini API Key</span>
+                            <div class="inline-field">
+                              <input type="password" id="ai-naming-api-key" placeholder="粘贴你的 Gemini API Key"
+                                style="flex:1;" />
+                              <button id="ai-naming-toggle-key" class="ghost compact" type="button"
+                                title="显示/隐藏">&#128065;</button>
+                              <button id="ai-naming-test-key" class="ghost compact" type="button">测试</button>
+                            </div>
+                            <small class="muted">前往 <a href="#" id="ai-naming-get-key-link"
+                                style="color:#3b82f6;cursor:pointer;">Google AI Studio</a> 免费获取 API Key</small>
+                          </label>
+                          <div id="ai-naming-test-result" hidden
+                            style="font-size:12px; padding:8px 12px; border-radius:8px;"></div>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div style="font-weight:600; color:#0f172a; margin-bottom:10px;">关键词参数</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                          <label>
+                            <span>每次选取关键词数量</span>
+                            <input type="number" id="ai-naming-keyword-count" min="1" max="10" value="3" />
+                            <small class="muted">AI 从词库中选取这么多个最匹配的词</small>
+                          </label>
+                          <label>
+                            <span>关键词分隔符</span>
+                            <select id="ai-naming-separator">
+                              <option value="_">下划线 (_)</option>
+                              <option value="-">连字符 (-)</option>
+                              <option value=".">句点 (.)</option>
+                            </select>
+                            <small class="muted">多个关键词之间的连接符</small>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="settings-group-card"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                        <div
+                          style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                          <div>
+                            <div style="font-weight:600; color:#0f172a;">关键词词库</div>
+                            <small class="muted">AI 只会从这些词中选取，不会创造新词。</small>
+                          </div>
+                          <span id="ai-naming-keyword-count-display"
+                            style="font-size:12px; color:#64748b; background:#e2e8f0; padding:2px 8px; border-radius:10px;">0
+                            个词</span>
+                        </div>
+                        <textarea id="ai-naming-keywords" rows="8"
+                          placeholder="每行一个关键词，或用逗号分隔。例如：&#10;祷告&#10;十字架&#10;暖色调&#10;油画风格&#10;人物特写&#10;风景&#10;教堂"
+                          style="width:100%; font-size:13px; line-height:1.6; resize:vertical;"></textarea>
+                        <div style="margin-top:8px;">
+                          <small class="muted">提示：在"命名规则"页中添加 <code
+                              style="background:#e2e8f0; padding:1px 6px; border-radius:4px;">{{aiKeywords}}</code>
+                            token 来控制关键词在文件名中的位置。</small>
+                        </div>
+                      </div>
+
+                      <details style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:16px;">
+                        <summary style="font-weight:600; color:#1e40af; cursor:pointer;">使用说明</summary>
+                        <div style="margin-top:10px; font-size:13px; line-height:1.8; color:#1e3a5f;">
+                          <p><strong>1.</strong> 获取 Gemini API Key，填入上方，点击"测试"验证。</p>
+                          <p><strong>2.</strong> 在词库文本框填入你希望 AI 选择的关键词。</p>
+                          <p><strong>3.</strong> 在"命名规则"页中，将 <strong>AI关键词</strong> token 拖到你想要的位置。</p>
+                          <p><strong>4.</strong> 上传文件时 AI 会自动分析每张图片，从词库中选取最匹配的关键词填入文件名。</p>
+                          <p
+                            style="margin-top:8px; padding:8px 12px; background:#fefce8; border-radius:8px; color:#854d0e;">
+                            AI 命名会在上传前分析图片，每张图片约需 1-3 秒。如果命名模板中没有 {{aiKeywords}} token，AI 分析结果不会影响文件名。
+                          </p>
+                        </div>
+                      </details>
+                    </div>
+                  </section>
+                </section>
+
+                <section class="settings-panel" data-settings-panel="notification">
+                  <section class="panel" id="settings-notification-panel">
+                    <div class="panel-header">
+                      <div>
+                        <h2>通知与身份设置</h2>
+                        <p class="panel-subtitle">统一管理审核提醒与声音通知</p>
+                      </div>
+                      <div class="panel-actions">
+                        <button id="reset-notification-config" class="ghost danger" type="button">恢复默认</button>
+                      </div>
+                    </div>
+                    <div class="settings-role-row notification-row">
+                      <div class="notification-card">
+                        <label for="user-role">通知身份</label>
+                        <select id="user-role">
+                          <option value="submitter">提交人（收建议提醒）</option>
+                          <option value="reviewer">审核人员（收待审核提醒）</option>
+                          <option value="both">双重身份（全部提醒）</option>
+                        </select>
+                      </div>
+                      <div class="notification-card switch-card">
+                        <label>弹框通知</label>
+                        <label class="checkbox-field inline">
+                          <input type="checkbox" id="enable-floating-notification" />
+                          <span>启用弹框通知</span>
+                        </label>
+                      </div>
+                      <div class="notification-card">
+                        <label>通知位置</label>
+                        <select id="notification-position">
+                          <option value="topRight">↗️ 右上角</option>
+                          <option value="bottomRight">↘️ 右下角</option>
+                          <option value="center">⬜ 屏幕中央</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="notification-config">
+                      <label>
+                        <span>通知方式</span>
+                        <select id="notification-mode">
+                          <option value="beep">提示音</option>
+                          <option value="speech">语音播报</option>
+                          <option value="silent">静音</option>
+                          <option value="custom">自定义音频</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>待审核提示音（留空为默认）</span>
+                        <input type="text" id="notification-sound-review"
+                          placeholder="file:///Users/xx/review.mp3 或 https://..." />
+                      </label>
+                      <label>
+                        <span>建议提示音（留空为默认）</span>
+                        <input type="text" id="notification-sound-suggestion"
+                          placeholder="file:///Users/xx/suggestion.mp3 或 https://..." />
+                      </label>
+                      <label>
+                        <span>通过提示音（留空为默认）</span>
+                        <input type="text" id="notification-sound-approved"
+                          placeholder="file:///Users/xx/approved.mp3 或 https://..." />
+                      </label>
+                      <small class="muted notification-note">
+                        审核状态每次发生变化时会提醒一次；选择"语音播报"会朗读"有图需要审核 / 图片有建议反馈"，自定义音频支持 file:/// 或 http(s) 链接。
+                      </small>
+                    </div>
+                  </section>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div id="global-alert" class="global-alert" role="status" aria-live="polite"></div>
+
+  <!-- 文件替换弹窗 -->
+  <div id="file-replace-modal" class="modal-overlay" hidden>
+    <div class="modal-content file-replace-modal">
+      <div class="modal-header">
+        <h3>替换不合格文件</h3>
+        <button class="modal-close" id="file-replace-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="file-replace-info">
+          <div class="old-file-info">
+            <strong>原文件：</strong>
+            <span id="replace-old-filename">-</span>
+          </div>
+        </div>
+        <div class="file-replace-dropzone" id="file-replace-dropzone">
+          <div class="dropzone-content">
+            <div class="dropzone-icon">📁</div>
+            <p>拖拽新文件到此处</p>
+            <p class="dropzone-hint">或点击选择文件</p>
+            <input type="file" id="file-replace-input" hidden accept="image/*,video/*" />
+          </div>
+        </div>
+        <div class="file-replace-preview" id="file-replace-preview" hidden>
+          <div class="preview-file-name" id="replace-new-filename">-</div>
+          <button class="btn-clear-file" id="file-replace-clear">✕ 清除</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn secondary" id="file-replace-cancel">取消</button>
+        <button class="btn primary" id="file-replace-confirm" disabled>确认替换</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量替换弹窗 -->
+  <div id="batch-replace-modal" class="modal-overlay" hidden>
+    <div class="modal-content batch-replace-modal">
+      <div class="modal-header">
+        <h3>📦 批量替换不合格文件</h3>
+        <button class="modal-close" id="batch-replace-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="batch-replace-hint">
+          <p>以下文件需要替换，请为每个文件选择新版本：</p>
+        </div>
+        <div class="batch-replace-list" id="batch-replace-list">
+          <!-- 动态生成替换项 -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="batch-replace-progress">
+          <span id="batch-replace-count">0/0 已选择</span>
+        </div>
+        <button class="btn secondary" id="batch-replace-cancel">取消</button>
+        <button class="btn primary" id="batch-replace-confirm" disabled>确认替换全部</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批次设置编辑弹窗 -->
+  <div id="batch-settings-modal" class="modal-overlay" hidden>
+    <div class="modal-content batch-settings-modal">
+      <div class="modal-header">
+        <h3>🛠 批次设置</h3>
+        <button class="modal-close" id="batch-settings-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="batch-settings-panel">
+          <section class="batch-settings-section">
+            <div class="batch-settings-section-title">基础设置</div>
+            <div class="grid two-cols">
+              <label>
+                <span>提交人</span>
+                <input type="text" id="batch-settings-submitter" placeholder="提交人" readonly
+                  style="background: #f1f5f9; cursor: default;" />
+              </label>
+              <label>
+                <span>任务类型</span>
+                <select id="batch-settings-task-type-select">
+                  <option value="">请选择</option>
+                  <option value="sora视频">sora视频</option>
+                  <option value="简单图">简单图</option>
+                  <option value="口播动画">口播动画</option>
+                  <option value="口播完整">口播完整</option>
+                  <option value="美工图">美工图</option>
+                  <option value="普通视频">普通视频</option>
+                  <option value="视频-难">视频-难</option>
+                  <option value="灾难图">灾难图</option>
+                  <option value="主耶稣图">主耶稣图</option>
+                  <option value="__custom__">自定义...</option>
+                </select>
+                <input type="text" id="batch-settings-task-type-custom" placeholder="输入自定义任务类型"
+                  style="margin-top: 8px; display: none;" />
+              </label>
+              <label>
+                <span>入库主分类</span>
+                <select id="batch-settings-main-category">
+                  <option value="">请选择</option>
+                </select>
+              </label>
+              <label>
+                <span>入库子分类</span>
+                <select id="batch-settings-sub-category" disabled>
+                  <option value="">请选择</option>
+                </select>
+              </label>
+              <label class="batch-settings-field" data-token="admin">
+                <span>管理员（命名字段）</span>
+                <input type="text" id="batch-settings-admin" placeholder="管理员" />
+              </label>
+            </div>
+          </section>
+          <section class="batch-settings-section">
+            <div class="batch-settings-section-title">命名规则</div>
+            <div class="grid two-cols">
+              <label>
+                <div class="batch-settings-label-row">
+                  <span>文件命名规则</span>
+                  <span class="link-btn toggle-pattern-btn" data-target="batch-settings-rename-pattern">自定义规则</span>
+                </div>
+                <select id="batch-settings-rename-preset">
+                  <option value="">选择命名预设</option>
+                </select>
+                <input type="text" id="batch-settings-rename-pattern" class="pattern-input is-hidden"
+                  placeholder="如：{{customDate}}-{{submitter}}-{{counter}}{{ext}}" />
+              </label>
+              <label>
+                <div class="batch-settings-label-row">
+                  <span>文件夹命名规则</span>
+                  <span class="link-btn toggle-pattern-btn" data-target="batch-settings-folder-pattern">自定义规则</span>
+                </div>
+                <select id="batch-settings-folder-preset">
+                  <option value="">选择文件夹预设</option>
+                </select>
+                <input type="text" id="batch-settings-folder-pattern" class="pattern-input is-hidden"
+                  placeholder="如：{{customDate}}-{{submitter}}" />
+              </label>
+            </div>
+            <div class="batch-settings-preview-row">
+              <div class="batch-settings-preview-item">
+                <span class="batch-settings-preview-label">文件命名预览：</span>
+                <span id="batch-settings-rename-preview" class="batch-settings-preview-value">-</span>
+              </div>
+              <div class="batch-settings-preview-item">
+                <span class="batch-settings-preview-label">文件夹预览：</span>
+                <span id="batch-settings-folder-preview" class="batch-settings-preview-value">-</span>
+              </div>
+            </div>
+          </section>
+          <section class="batch-settings-section">
+            <div class="batch-settings-section-title">自定义命名字段</div>
+            <div class="grid two-cols batch-settings-fields">
+              <label class="batch-settings-field" data-token="subject">
+                <span>图片名称</span>
+                <input type="text" id="batch-settings-subject" placeholder="图片名称" />
+              </label>
+              <label class="batch-settings-field" data-token="eventName">
+                <span>事件名称</span>
+                <input type="text" id="batch-settings-event" placeholder="事件名称" />
+              </label>
+              <label class="batch-settings-field" data-token="customDate">
+                <span>日期</span>
+                <input type="text" id="batch-settings-custom-date" placeholder="如：20240101" />
+              </label>
+              <label class="batch-settings-field" data-token="country">
+                <span>国家</span>
+                <input type="text" id="batch-settings-country" placeholder="国家" />
+              </label>
+              <label class="batch-settings-field" data-token="software">
+                <span>软件</span>
+                <input type="text" id="batch-settings-software" placeholder="软件" />
+              </label>
+              <label class="batch-settings-field wide" data-token="customText">
+                <span>自定义字段（每行一条，格式：customText:xxx=值）</span>
+                <textarea id="batch-settings-custom-texts" rows="4"
+                  placeholder="customText:tag=海报\ncustomText:series=第3期"></textarea>
+              </label>
+            </div>
+          </section>
+          <small class="muted">
+            保存后会同步更新该批次所有文件的命名规则与命名结果。
+          </small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn secondary" id="batch-settings-cancel">取消</button>
+        <button class="btn primary" id="batch-settings-confirm">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔴 多用户 Profile 管理弹窗 -->
+  <div id="profile-manager-modal" class="profile-modal-overlay" hidden>
+    <div class="profile-modal">
+      <div class="profile-modal-header">
+        <h2>👤 用户 Profile 管理</h2>
+        <button id="profile-modal-close" class="profile-modal-close" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="profile-modal-body">
+        <div class="profile-list" id="profile-list">
+          <!-- 动态渲染 Profile 列表 -->
+        </div>
+        <div class="profile-create-section">
+          <div class="profile-create-form">
+            <input type="text" id="profile-new-name" placeholder="输入新 Profile 名称..." maxlength="30" />
+            <button id="profile-create-btn" class="primary" type="button">创建 Profile</button>
+          </div>
+          <p class="profile-create-hint">每个 Profile 拥有完全独立的配置、Google 账户和数据。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔴 首次启动设置向导 -->
+  <div id="setup-wizard-overlay" class="wizard-overlay" hidden>
+    <div class="wizard-container">
+      <!-- 步骤指示器 -->
+      <div class="wizard-steps-bar">
+        <span class="wizard-step-dot active" data-step="0"></span>
+        <span class="wizard-step-dot" data-step="1"></span>
+        <span class="wizard-step-dot" data-step="2"></span>
+        <span class="wizard-step-dot" data-step="3"></span>
+        <span class="wizard-step-dot" data-step="4"></span>
+      </div>
+
+      <!-- Panel 0: 欢迎 / 选择路径 -->
+      <div class="wizard-panel active" data-panel="0">
+        <div class="wizard-welcome-icon">🚀</div>
+        <h1 class="wizard-title">欢迎使用 ITEN 上传工具</h1>
+        <p class="wizard-subtitle">请选择配置方式来开始</p>
+        <div class="wizard-choices">
+          <button id="wizard-choose-import" class="wizard-choice-card" type="button">
+            <div class="wizard-choice-icon">📥</div>
+            <div class="wizard-choice-label">导入团队配置文件</div>
+            <div class="wizard-choice-desc">已有管理员提供的 JSON 配置文件</div>
+          </button>
+          <button id="wizard-choose-manual" class="wizard-choice-card" type="button">
+            <div class="wizard-choice-icon">⚙️</div>
+            <div class="wizard-choice-label">手动配置</div>
+            <div class="wizard-choice-desc">我是管理员，需要从零开始配置</div>
+          </button>
+        </div>
+        <button id="wizard-skip-btn" class="wizard-skip" type="button">跳过，稍后在设置中配置</button>
+      </div>
+
+      <!-- Panel 1: 导入配置 -->
+      <div class="wizard-panel" data-panel="1">
+        <div class="wizard-welcome-icon">📥</div>
+        <h2 class="wizard-title">导入团队配置文件</h2>
+        <p class="wizard-subtitle">选择管理员提供的 JSON 配置文件，将自动填充所有必要设置。</p>
+        <div class="wizard-import-area">
+          <button id="wizard-import-file-btn" class="primary wizard-big-btn" type="button">选择配置文件 (.json)</button>
+          <div id="wizard-import-status" class="wizard-import-status" hidden></div>
+        </div>
+        <p class="wizard-hint">导入后您仍需登录自己的 Google 账户才能使用。配置文件中不含个人登录信息。</p>
+        <div class="wizard-nav">
+          <button id="wizard-import-back" class="ghost" type="button">← 返回</button>
+        </div>
+      </div>
+
+      <!-- Panel 2: 手动配置 — 第1步：凭证 -->
+      <div class="wizard-panel" data-panel="2">
+        <h2 class="wizard-title">第 1 步：Google Cloud 凭证</h2>
+        <p class="wizard-subtitle">在 <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
+            style="color:var(--primary)">Google Cloud Console</a> 创建 OAuth 2.0 客户端后，填入以下信息：</p>
+        <div class="wizard-form">
+          <label class="wizard-field">
+            <span>Client ID <span class="required">*</span></span>
+            <input type="text" id="wizard-client-id" placeholder="xxxx.apps.googleusercontent.com" />
+          </label>
+          <label class="wizard-field">
+            <span>Client Secret <span class="required">*</span></span>
+            <input type="password" id="wizard-client-secret" placeholder="应用密钥" />
+          </label>
+        </div>
+        <details class="wizard-help">
+          <summary>📖 如何获取 Client ID 和 Secret？</summary>
+          <ol>
+            <li>打开 <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+            <li>创建一个项目（或使用现有项目）</li>
+            <li>进入 API 和服务 → 凭证</li>
+            <li>创建 OAuth 2.0 客户端 ID（类型选「桌面应用）</li>
+            <li>复制 Client ID 和 Client Secret 填入上方</li>
+            <li>在 OAuth 许可屏幕中启用 Google Drive API 和 Google Sheets API</li>
+          </ol>
+        </details>
+        <div class="wizard-nav">
+          <button id="wizard-manual-back" class="ghost" type="button">← 返回</button>
+          <button id="wizard-manual-next" class="primary" type="button">下一步 →</button>
+        </div>
+      </div>
+
+      <!-- Panel 3: 手动配置 — 第2步：表格和目录 -->
+      <div class="wizard-panel" data-panel="3">
+        <h2 class="wizard-title">第 2 步：表格和目录（可选）</h2>
+        <p class="wizard-subtitle">这些可以稍后在设置中配置，也可以现在填写。</p>
+        <div class="wizard-form">
+          <label class="wizard-field">
+            <span>入库表格 ID 或链接</span>
+            <input type="text" id="wizard-sheet-id" placeholder="粘贴 Google Sheets 链接或 ID" />
+            <small>用于记录上传的文件信息</small>
+          </label>
+          <label class="wizard-field">
+            <span>Drive 目标文件夹 ID 或链接</span>
+            <input type="text" id="wizard-drive-folder-id" placeholder="粘贴 Google Drive 文件夹链接或 ID" />
+            <small>文件将上传到此文件夹</small>
+          </label>
+        </div>
+        <div style="margin-top:16px">
+          <h3 style="font-size:15px; font-weight:600; margin:0 0 8px;">🔥 Firebase 实时数据库 <span class="required">*</span>
+          </h3>
+          <p style="font-size:12px;color:var(--muted);margin:0 0 10px">团队管理员需配置 Firebase 项目以启用打卡和实时同步功能。</p>
+          <div class="wizard-form" style="margin-bottom:0">
+            <label class="wizard-field">
+              <span>API Key <span class="required">*</span></span>
+              <input type="text" id="wizard-firebase-apikey" placeholder="AIzaSy..." />
+            </label>
+            <label class="wizard-field">
+              <span>Auth Domain <span class="required">*</span></span>
+              <input type="text" id="wizard-firebase-authdomain" placeholder="your-project.firebaseapp.com" />
+            </label>
+            <label class="wizard-field">
+              <span>Database URL <span class="required">*</span></span>
+              <input type="text" id="wizard-firebase-dburl"
+                placeholder="https://your-project-default-rtdb.firebaseio.com" />
+            </label>
+            <label class="wizard-field">
+              <span>Project ID <span class="required">*</span></span>
+              <input type="text" id="wizard-firebase-projectid" placeholder="your-project-id" />
+            </label>
+          </div>
+          <details class="wizard-help">
+            <summary>📖 如何获取 Firebase 配置？</summary>
+            <ol>
+              <li>打开 <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a></li>
+              <li>点击「添加项目」，输入项目名称，按提示完成创建</li>
+              <li>进入项目后，点击左侧 ⚙️ →「项目设置」</li>
+              <li>在「常规」标签页底部的「您的应用」区域，点击 Web 图标 <code>&lt;/&gt;</code> 添加 Web 应用</li>
+              <li>注册应用后，会显示 <code>firebaseConfig</code> 对象，从中复制 apiKey、authDomain、databaseURL、projectId</li>
+              <li>在左侧 →「构建」→「Realtime Database」→「创建数据库」（选区域后启动，<strong>databaseURL</strong> 会自动出现在 config 中）</li>
+              <li>在左侧 →「构建」→「Authentication」→ 启用「Google」登录方式</li>
+            </ol>
+          </details>
+        </div>
+        <div class="wizard-nav">
+          <button id="wizard-manual-back2" class="ghost" type="button">← 上一步</button>
+          <button id="wizard-manual-save" class="primary" type="button">保存并完成</button>
+        </div>
+      </div>
+
+      <!-- Panel 4: 完成 -->
+      <div class="wizard-panel" data-panel="4">
+        <div class="wizard-welcome-icon">🎉</div>
+        <h2 class="wizard-title">配置完成！</h2>
+        <p class="wizard-subtitle">您的基础配置已保存。接下来请登录 Google 账户开始使用。</p>
+        <div class="wizard-done-actions">
+          <button id="wizard-finish-btn" class="primary wizard-big-btn" type="button">开始使用</button>
+          <button id="wizard-export-team-config" class="ghost" type="button">📤 导出为团队配置文件（供其他成员使用）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+  <script src="profile-manager.js"></script>
+  <script src="setup-wizard.js"></script>
+  <script src="checkin-core.js"></script>
+  <script src="checkin-actions.js"></script>
+  <script src="checkin-render1.js"></script>
+  <script src="checkin-render2.js"></script>
+  <script src="checkin-report.js"></script>
+  <script src="checkin-stats.js"></script>
+  <script src="daily-checkin.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,108 @@
+{
+  "name": "wcmg-auto-tool",
+  "version": "2.0.24",
+  "description": "",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "cross-env ELECTRON_RUN_AS_NODE= NODE_ENV=development electronmon .",
+    "start": "cross-env ELECTRON_RUN_AS_NODE= electron .",
+    "clean": "rimraf dist",
+    "dist": "electron-builder --mac --win --linux",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "prepare-release": "node prepare-release.js",
+    "deploy": "npm run prepare-release && netlify deploy --dir=release_site --prod --site=ce78a8be-283d-4257-bc8d-8ad01fec0487"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git"
+  },
+  "keywords": [],
+  "author": {
+    "name": "ITEN Team",
+    "email": "dev@example.com"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^26.2.0",
+    "electron-builder": "^24.13.3",
+    "electronmon": "^1.1.2",
+    "png2icons": "^2.0.1",
+    "rimraf": "^5.0.10"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
+    "file-type": "^16.5.4",
+    "firebase": "^12.7.0",
+    "googleapis": "^166.0.0",
+    "mime-types": "^3.0.1"
+  },
+  "build": {
+    "appId": "com.example.artautoform",
+    "productName": "ITEN上传工具",
+    "files": [
+      "package.json",
+      "src/**/*",
+      "assets/icons/icon.jpeg"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.icns",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.png",
+      "category": "Utility"
+    },
+    "asarUnpack": [
+      "node_modules/gaxios/**",
+      "node_modules/gaxios/build/**/node_modules/**",
+      "node_modules/googleapis/node_modules/gaxios/**",
+      "node_modules/googleapis/node_modules/gaxios/build/**/node_modules/**",
+      "node_modules/node-fetch/**"
+    ],
+    "asar": false,
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://gorgeous-kashata-c9da30.netlify.app/"
+      }
+    ]
+  }
+}

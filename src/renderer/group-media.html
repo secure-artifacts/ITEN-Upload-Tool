@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-view="group-media">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>组内媒体查看</title>
+    <link rel="stylesheet" href="group-media.css" />
+</head>
+
+<body>
+    <div class="media-app">
+        <!-- 顶部工具栏 -->
+        <header class="media-header">
+            <h1>📁 组内媒体查看</h1>
+            <div class="header-actions">
+                <button id="toggle-view-btn" class="btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span id="view-toggle-text">切换到浏览</span>
+                </button>
+                <button id="refresh-btn" class="btn-ghost">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    刷新
+                </button>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="media-main">
+            <!-- 提交视图 -->
+            <section class="view-section active" id="submit-view">
+                <div class="submit-container">
+                    <div class="submit-card">
+                        <header class="card-header">
+                            <h2>提交媒体文件夹</h2>
+                            <p class="subtitle">填写 Google Drive 文件夹链接，提交后可在浏览视图中查看</p>
+                        </header>
+
+                        <form id="submit-form" class="submit-form">
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label for="submit-submitter">
+                                        <span class="label-text">提交人</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input type="text" id="submit-submitter" required placeholder="请输入您的姓名" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="submit-admin">
+                                        <span class="label-text">管理员</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input type="text" id="submit-admin" required placeholder="请输入负责管理员" />
+                                </div>
+
+                                <div class="form-field full-width">
+                                    <label for="submit-folder-link">
+                                        <span class="label-text">文件夹链接</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input type="text" id="submit-folder-link" required
+                                        placeholder="粘贴 Google Drive 文件夹链接，如：https://drive.google.com/drive/folders/..." />
+                                    <small class="field-hint">从 Google Drive 复制文件夹的分享链接</small>
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="submit-content-type">
+                                        <span class="label-text">内容类型</span>
+                                        <span class="required">*</span>
+                                    </label>
+                                    <select id="submit-content-type" required>
+                                        <option value="">请选择</option>
+                                        <option value="reels">Reels</option>
+                                        <option value="sora">Sora</option>
+                                        <option value="主耶稣图">主耶稣图</option>
+                                        <option value="其他">其他</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-field full-width">
+                                    <label for="submit-notes">
+                                        <span class="label-text">备注</span>
+                                        <span class="optional">(可选)</span>
+                                    </label>
+                                    <textarea id="submit-notes" rows="3" placeholder="可填写补充说明、用途、注意事项等"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" id="preview-folder-btn" class="btn-ghost">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    预览文件夹
+                                </button>
+                                <button type="submit" class="btn-primary">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                    </svg>
+                                    提交
+                                </button>
+                            </div>
+                        </form>
+
+                        <div id="submit-result" class="submit-result" hidden>
+                            <div class="result-icon">✓</div>
+                            <div class="result-message">提交成功！</div>
+                            <div class="result-details" id="result-details"></div>
+                            <button type="button" id="submit-another-btn" class="btn-secondary">继续提交</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 浏览视图 -->
+            <section class="view-section" id="browse-view">
+                <div class="browse-container">
+                    <!-- 筛选工具栏 -->
+                    <div class="browse-toolbar">
+                        <div class="toolbar-left">
+                            <input type="text" id="search-input" class="search-input" placeholder="搜索提交人、管理员、备注..." />
+                        </div>
+                        <div class="toolbar-right">
+                            <div class="filter-group">
+                                <label for="filter-type">类型</label>
+                                <select id="filter-type">
+                                    <option value="">全部</option>
+                                    <option value="reels">Reels</option>
+                                    <option value="sora">Sora</option>
+                                    <option value="主耶稣图">主耶稣图</option>
+                                    <option value="其他">其他</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="sort-by">排序</label>
+                                <select id="sort-by">
+                                    <option value="time-desc">最新提交</option>
+                                    <option value="time-asc">最早提交</option>
+                                    <option value="type">按类型</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 媒体记录网格 -->
+                    <div id="media-grid" class="media-grid">
+                        <!-- 动态生成媒体卡片 -->
+                    </div>
+
+                    <!-- 空状态 -->
+                    <div id="empty-state" class="empty-state" hidden>
+                        <div class="empty-icon">📁</div>
+                        <h3>暂无媒体记录</h3>
+                        <p>点击上方"切换到提交"按钮提交第一个媒体文件夹</p>
+                    </div>
+
+                    <!-- 加载状态 -->
+                    <div id="loading-state" class="loading-state" hidden>
+                        <div class="spinner"></div>
+                        <p>加载中...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 文件夹详情模态窗口 -->
+        <div id="folder-modal" class="modal" hidden>
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <header class="modal-header">
+                    <div class="modal-title">
+                        <h3 id="modal-folder-name">文件夹预览</h3>
+                        <div class="modal-meta" id="modal-meta"></div>
+                    </div>
+                    <button type="button" id="close-modal-btn" class="btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </header>
+
+                <div class="modal-body">
+                    <div class="file-preview-layout">
+                        <div class="file-grid-wrapper">
+                            <div id="file-grid" class="file-grid">
+                                <!-- 动态生成文件缩略图 -->
+                            </div>
+
+                            <div id="modal-empty" class="modal-empty" hidden>
+                                <div class="empty-icon">📭</div>
+                                <p>此文件夹为空或无法访问</p>
+                            </div>
+
+                            <div id="modal-loading" class="modal-loading" hidden>
+                                <div class="spinner"></div>
+                                <p>加载文件列表...</p>
+                            </div>
+                        </div>
+
+                        <div class="preview-pane" id="preview-pane">
+                            <header class="preview-header">
+                                <div class="preview-title" id="preview-title">选择左侧文件预览</div>
+                                <div class="preview-actions">
+                                    <button type="button" class="btn-ghost" id="preview-reset-btn">重置视图</button>
+                                    <button type="button" class="btn-primary" id="preview-open-btn" disabled>在浏览器打开</button>
+                                </div>
+                            </header>
+                            <div class="preview-stage" id="preview-stage">
+                                <div class="preview-media" id="preview-media"></div>
+                                <div class="preview-hint" id="preview-hint">支持滚轮放大、拖拽平移</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" id="open-folder-btn" class="btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                        在 Google Drive 中打开
+                    </button>
+                    <button type="button" id="cancel-modal-btn" class="btn-ghost">关闭</button>
+                </footer>
+            </div>
+        </div>
+
+        <!-- 文件预览模态窗口 -->
+        <div id="file-preview-modal" class="modal preview-modal" hidden>
+            <div class="modal-overlay"></div>
+            <div class="modal-content preview-content">
+                <button type="button" id="close-preview-btn" class="btn-icon close-preview">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                <div class="preview-container" id="preview-container">
+                    <!-- 动态显示图片或视频 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast 提示 -->
+        <div id="toast" class="toast" hidden>
+            <div class="toast-content">
+                <span id="toast-message"></span>
+            </div>
+        </div>
+    </div>
+
+    <script src="group-media.js"></script>
+</body>
+
+</html>
