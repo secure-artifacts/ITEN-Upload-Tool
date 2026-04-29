@@ -270,10 +270,22 @@
     }
 
     // 生成每日卡片
-    // 🔴 修复：使用公共函数获取合并后的记录
+    // 🔴 支持选择不同成员查看
     const myName = state.profile.name;
     const teamName = state.profile.teamName || 'default';
-    const allRecords = getMergedUserRecords(myName, teamName);
+    const selectedMember = state.historyMemberFilter || myName;
+    const allRecords = getMergedUserRecords(selectedMember, teamName);
+
+    // 🔴 获取所有成员列表（用于下拉框）
+    const allTeamRecords = (state.teamRecords || []).filter(r => (r.teamName || 'default') === teamName);
+    const memberSet = new Set();
+    allTeamRecords.forEach(r => { if (r.userName) memberSet.add(r.userName); });
+    if (myName && !memberSet.has(myName)) memberSet.add(myName);
+    const memberList = Array.from(memberSet).sort((a, b) => a === myName ? -1 : b === myName ? 1 : a.localeCompare(b, 'zh-CN'));
+
+    const memberOptions = memberList.map(name =>
+      `<option value="${name}" ${name === selectedMember ? 'selected' : ''}>${name}${name === myName ? '（我）' : ''}</option>`
+    ).join('');
 
     const cards = dateList.map(date => {
       const ds = formatDate(date);
@@ -310,6 +322,12 @@
             <button id="ck-prev-month" class="ck-btn-icon">◀</button>
             <span>📅 ${year} 年 ${month + 1} 月 · ${rangeLabel}</span>
             <button id="ck-next-month" class="ck-btn-icon">▶</button>
+          </div>
+          <div class="ck-history-member-filter" style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 13px; color: var(--text-secondary); white-space: nowrap;">👤 查看成员：</label>
+            <select id="ck-history-member-select" style="flex: 1; max-width: 200px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-color, rgba(148,163,184,0.3)); background: var(--bg-secondary, #f8fafc); font-size: 13px;">
+              ${memberOptions}
+            </select>
           </div>
         </div>
         <div class="ck-day-grid">${cards}</div>

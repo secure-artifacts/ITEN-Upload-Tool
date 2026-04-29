@@ -1,0 +1,469 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - heading "API 密钥设置" [level=3] [ref=e5]
+      - generic [ref=e6]:
+        - button "手动输入" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - text: 手动输入
+        - button "API池管理" [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - text: API池管理
+      - generic [ref=e18]:
+        - paragraph [ref=e19]: 手动设置单个密钥用处不大，建议使用网站版，可以支持多密钥自动轮换。
+        - textbox "在此输入 Google AI API 密钥" [ref=e21]
+        - generic [ref=e22]:
+          - button "🔗 免费获取 API Key" [ref=e23] [cursor=pointer]
+          - paragraph [ref=e24]: 点击跳转到 Google AI Studio，登录后即可一键创建
+        - generic [ref=e25]:
+          - button "取消" [ref=e26] [cursor=pointer]
+          - button "保存" [ref=e27] [cursor=pointer]
+    - generic [ref=e29]:
+      - button "展开功能菜单" [ref=e30] [cursor=pointer]:
+        - generic [ref=e31]: 👉
+      - navigation [ref=e32]:
+        - button "palette" [ref=e33] [cursor=pointer]:
+          - generic [ref=e34]: palette
+        - button "collections" [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]: collections
+        - button "image_search" [ref=e37] [cursor=pointer]:
+          - generic [ref=e38]: image_search
+        - button "center_focus_weak" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: center_focus_weak
+        - button "hub" [ref=e41] [cursor=pointer]:
+          - generic [ref=e42]: hub
+        - button "fingerprint" [ref=e43] [cursor=pointer]:
+          - generic [ref=e44]: fingerprint
+        - button "event_note" [ref=e45] [cursor=pointer]:
+          - generic [ref=e46]: event_note
+        - button "translate" [ref=e47] [cursor=pointer]:
+          - generic [ref=e48]: translate
+        - button "psychology" [ref=e49] [cursor=pointer]:
+          - generic [ref=e50]: psychology
+        - button "table_chart" [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: table_chart
+        - button "bolt" [ref=e53] [cursor=pointer]:
+          - generic [ref=e54]: bolt
+        - button "category" [ref=e55] [cursor=pointer]:
+          - generic [ref=e56]: category
+        - button "chat" [ref=e57] [cursor=pointer]:
+          - generic [ref=e58]: chat
+        - button "movie_filter" [ref=e59] [cursor=pointer]:
+          - generic [ref=e60]: movie_filter
+        - button "slow_motion_video" [ref=e61] [cursor=pointer]:
+          - generic [ref=e62]: slow_motion_video
+        - button "account_tree" [ref=e63] [cursor=pointer]:
+          - generic [ref=e64]: account_tree
+        - button "text_fields" [ref=e65] [cursor=pointer]:
+          - generic [ref=e66]: text_fields
+        - button "public" [ref=e67] [cursor=pointer]:
+          - generic [ref=e68]: public
+        - button "school" [ref=e69] [cursor=pointer]:
+          - generic [ref=e70]: school
+        - button "fact_check" [ref=e71] [cursor=pointer]:
+          - generic [ref=e72]: fact_check
+        - button "apps" [ref=e73] [cursor=pointer]:
+          - generic [ref=e74]: apps
+        - button "mail_outline" [ref=e75] [cursor=pointer]:
+          - generic [ref=e76]: mail_outline
+        - button "drive_file_rename_outline" [ref=e77] [cursor=pointer]:
+          - generic [ref=e78]: drive_file_rename_outline
+        - button "tips_and_updates" [ref=e79] [cursor=pointer]:
+          - generic [ref=e80]: tips_and_updates
+        - button "auto_awesome" [ref=e81] [cursor=pointer]:
+          - generic [ref=e82]: auto_awesome
+        - button "content_copy" [ref=e83] [cursor=pointer]:
+          - generic [ref=e84]: content_copy
+        - button "library_books" [ref=e85] [cursor=pointer]:
+          - generic [ref=e86]: library_books
+      - button [ref=e87] [cursor=pointer]:
+        - img [ref=e88]
+      - button [ref=e91] [cursor=pointer]:
+        - img [ref=e92]
+      - button "Web" [ref=e96] [cursor=pointer]:
+        - img [ref=e97]
+        - generic [ref=e100]: Web
+      - button [ref=e101] [cursor=pointer]:
+        - img [ref=e102]
+      - button "☀️" [ref=e105] [cursor=pointer]
+      - button [ref=e106] [cursor=pointer]:
+        - img [ref=e107]
+      - button "⏏" [ref=e110] [cursor=pointer]
+    - main [ref=e111]:
+      - generic [ref=e112]:
+        - generic [active] [ref=e113]:
+          - textbox [ref=e114]
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - generic [ref=e118]:
+                - img [ref=e120]
+                - button "更新说明" [ref=e122] [cursor=pointer]:
+                  - img [ref=e123]
+                  - generic [ref=e126]: 更新说明
+              - generic [ref=e127]: ⋮请先登录
+              - generic [ref=e128]:
+                - generic [ref=e130]:
+                  - button "添加图片" [ref=e132] [cursor=pointer]:
+                    - img [ref=e133]
+                    - text: 添加图片
+                  - button [disabled] [ref=e139]:
+                    - img [ref=e140]
+                - generic [ref=e143]:
+                  - button [ref=e144] [cursor=pointer]:
+                    - img [ref=e145]
+                  - button [ref=e147] [cursor=pointer]:
+                    - img [ref=e148]
+                  - button [ref=e149] [cursor=pointer]:
+                    - img [ref=e150]
+                - generic [ref=e155]:
+                  - button "标准" [ref=e156] [cursor=pointer]:
+                    - img [ref=e157]
+                    - text: 标准
+                  - button "创新" [ref=e159] [cursor=pointer]:
+                    - img [ref=e160]
+                    - text: 创新
+                  - button "快捷" [ref=e163] [cursor=pointer]:
+                    - img [ref=e164]
+                    - text: 快捷
+                  - button "拆分" [ref=e166] [cursor=pointer]:
+                    - img [ref=e167]
+                    - text: 拆分
+              - generic [ref=e172]:
+                - generic [ref=e173]:
+                  - button [ref=e174] [cursor=pointer]
+                  - generic [ref=e176] [cursor=pointer]: Gyazo
+                - button "📁" [ref=e177] [cursor=pointer]
+                - button [ref=e178] [cursor=pointer]:
+                  - img [ref=e179]
+            - generic [ref=e181]:
+              - generic [ref=e183]:
+                - generic [ref=e186]:
+                  - generic [ref=e187]:
+                    - generic [ref=e188]:
+                      - img [ref=e192]
+                      - generic [ref=e194]:
+                        - generic [ref=e195]: 识别指令
+                        - generic [ref=e196]: AI Prompt
+                    - generic [ref=e197]:
+                      - button "纯净模式已关闭：AI 可能输出带解释的回复" [ref=e198] [cursor=pointer]
+                      - generic [ref=e200] [cursor=pointer]: 纯净模式
+                  - generic [ref=e201]:
+                    - generic [ref=e202]:
+                      - generic [ref=e203]: 未登录
+                      - button [disabled] [ref=e204]:
+                        - img [ref=e205]
+                      - button [disabled] [ref=e209]:
+                        - img [ref=e210]
+                    - generic [ref=e213]:
+                      - button [ref=e214] [cursor=pointer]:
+                        - img [ref=e215]
+                      - button [ref=e218] [cursor=pointer]:
+                        - img [ref=e219]
+                    - button "预设指令" [ref=e223] [cursor=pointer]:
+                      - generic [ref=e224]: 预设指令
+                      - img [ref=e225]
+                - generic [ref=e228]:
+                  - textbox "✨ 选择预设指令或手动输入，用于反推提示词或其他图片识别需求。建议实测不同预设观察效果（双击展开大窗口）" [ref=e229]
+                  - generic [ref=e230]:
+                    - generic [ref=e231]: 0 字符
+                    - button "保存预设" [disabled] [ref=e233]:
+                      - img [ref=e234]
+                      - text: 保存预设
+              - generic [ref=e238]:
+                - generic [ref=e239]:
+                  - button "原始链接" [disabled] [ref=e240]:
+                    - img [ref=e241]
+                    - text: 原始链接
+                  - button "原始公式" [disabled] [ref=e244]:
+                    - img [ref=e245]
+                    - text: 原始公式
+                  - button "识别结果" [disabled] [ref=e250]:
+                    - img [ref=e251]
+                    - text: 识别结果
+                  - button "原+结果" [disabled] [ref=e256]:
+                    - img [ref=e257]
+                    - text: 原+结果
+                - generic [ref=e262]:
+                  - generic [ref=e263]:
+                    - button "创新" [disabled] [ref=e264]:
+                      - img [ref=e265]
+                      - text: 创新
+                    - button [ref=e268] [cursor=pointer]:
+                      - img [ref=e269]
+                  - button "重生成" [disabled] [ref=e272]:
+                    - img [ref=e273]
+                    - text: 重生成
+                  - button "重试" [disabled] [ref=e276]:
+                    - img [ref=e277]
+                    - text: 重试
+                  - button "导出" [disabled] [ref=e280]:
+                    - img [ref=e281]
+                    - text: 导出
+                  - button "送创新" [disabled] [ref=e284]:
+                    - img [ref=e285]
+                    - text: 送创新
+                - generic [ref=e291]:
+                  - generic [ref=e292]:
+                    - generic [ref=e293]:
+                      - generic [ref=e294]: 队列
+                      - generic [ref=e295]: "0"
+                    - generic [ref=e296]:
+                      - generic [ref=e297]: 待处理
+                      - generic [ref=e298]: "0"
+                    - generic [ref=e299]:
+                      - generic [ref=e300]: 成功
+                      - generic [ref=e301]: "0"
+                    - generic [ref=e302]:
+                      - generic [ref=e303]: 失败
+                      - generic [ref=e304]: "0"
+                  - generic [ref=e305]:
+                    - generic [ref=e306]: 批次模式
+                    - generic [ref=e307]:
+                      - button "单张" [ref=e308] [cursor=pointer]
+                      - button "3张" [ref=e309] [cursor=pointer]
+                      - button "5张" [ref=e310] [cursor=pointer]
+                      - button "8张" [ref=e311] [cursor=pointer]
+                      - button "15张" [ref=e312] [cursor=pointer]
+                      - button "25张" [ref=e313] [cursor=pointer]
+                      - button "50张" [ref=e314] [cursor=pointer]
+                  - button "开始识别" [disabled] [ref=e316]:
+                    - img [ref=e317]
+                    - text: 开始识别
+          - generic [ref=e319]:
+            - generic [ref=e320] [cursor=pointer]:
+              - generic "标签页 1" [ref=e321]
+              - button "重命名" [ref=e323]:
+                - img [ref=e324]
+            - button "新建标签页" [ref=e326] [cursor=pointer]:
+              - img [ref=e327]
+          - generic [ref=e331] [cursor=pointer]:
+            - textbox
+            - generic [ref=e332]:
+              - img [ref=e334]
+              - generic [ref=e338]:
+                - paragraph [ref=e339]: 拖拽图片到此处上传
+                - paragraph [ref=e340]: 单击后可粘贴 · 双击选择文件
+                - generic [ref=e342]:
+                  - generic [ref=e343]: Ctrl
+                  - generic [ref=e344]: +
+                  - generic [ref=e345]: V
+                  - generic [ref=e346]: 粘贴图片/链接
+        - generic [ref=e348]:
+          - generic [ref=e349]:
+            - generic [ref=e350]:
+              - img [ref=e352]
+              - generic [ref=e355]:
+                - heading "功能更新说明" [level=2] [ref=e356]
+                - paragraph [ref=e357]: v3.0 · 2026.02.20
+            - button "知道了" [ref=e358] [cursor=pointer]
+          - generic [ref=e359]:
+            - generic [ref=e360]:
+              - generic [ref=e361]:
+                - generic [ref=e362]: 2026.02.20
+                - generic [ref=e363]: v3.8.0
+              - generic [ref=e364]:
+                - heading "🖼️ 新增拆分模式（split）" [level=4] [ref=e365]
+                - list [ref=e366]:
+                  - listitem [ref=e367]: • 将画面元素拆开描述，支持中英文分别输出
+                  - listitem [ref=e368]: • 所有视图（列表、网格、紧凑）统一支持「中」「EN」分语言复制
+            - generic [ref=e370]:
+              - generic [ref=e371]: 2026.02.09
+              - generic [ref=e372]: v2.95.0
+            - generic [ref=e373]:
+              - heading "一 三种工作模式" [level=3] [ref=e374]:
+                - generic [ref=e375]: 一
+                - text: 三种工作模式
+              - paragraph [ref=e376]: 工具栏顶部可切换三种模式，覆盖从图片识别到批量描述词创新的完整工作流：
+              - generic [ref=e377]:
+                - generic [ref=e378]:
+                  - heading "⚡ 标准模式" [level=4] [ref=e379]
+                  - list [ref=e380]:
+                    - listitem [ref=e381]: • 逐张识别分析图片，生成描述词或分析结果
+                    - listitem [ref=e382]: • 支持自定义提示词预设、纯回复模式
+                    - listitem [ref=e383]: • 每张图片支持独立的多轮对话追问
+                    - listitem [ref=e384]: • 批量重试、并发控制、自动上传 Gyazo 图床
+                - generic [ref=e385]:
+                  - heading "✨ 创新模式" [level=4] [ref=e386]
+                  - list [ref=e387]:
+                    - listitem [ref=e388]: • 基于图片 + 指令，每张图生成多条创新描述词
+                    - listitem [ref=e389]: • 支持融合图片：为卡片额外添加参考图，融合多种风格
+                    - listitem [ref=e390]: • 无图模式：纯文本输入，批量创新描述词
+                    - listitem [ref=e391]: • 翻译功能：单条/批量英→中翻译，结果缓存
+                    - listitem [ref=e392]: • 可发送结果到「反推提示词」工具
+                - generic [ref=e393]:
+                  - heading "⚡ 快捷模式 新" [level=4] [ref=e394]
+                  - list [ref=e395]:
+                    - listitem [ref=e396]: • 无需图片，纯文本批量创新的高效模式
+                    - listitem [ref=e397]: • 自动集成随机库系统，实现组合式创新
+                    - listitem [ref=e398]: • 支持配套指令：每个随机库数据源可绑定专用指令
+                    - listitem [ref=e399]: • 紧凑的快捷面板，一站式管理随机库和创新
+            - generic [ref=e400]:
+              - heading "二 随机库系统全面升级" [level=3] [ref=e401]:
+                - generic [ref=e402]: 二
+                - text: 随机库系统全面升级
+              - list [ref=e404]:
+                - listitem [ref=e405]:
+                  - generic [ref=e406]: ✨
+                  - generic [ref=e407]: 支持多维度随机库（风格、场景、角色等），在设定范围内组合式创新
+                - listitem [ref=e408]:
+                  - generic [ref=e409]: ✓
+                  - generic [ref=e410]: Google Sheets 同步：支持从 Google Sheets 导入/导出随机库数据，多数据源切换
+                - listitem [ref=e411]:
+                  - generic [ref=e412]: ✓
+                  - generic [ref=e413]: 配套指令：每个数据源可绑定专用创新指令，切换数据源时自动切换指令
+                - listitem [ref=e414]:
+                  - generic [ref=e415]: ✓
+                  - generic [ref=e416]: AI 智能填充：使用 AI 自动生成随机库内容或分析图片提取元素
+                - listitem [ref=e417]:
+                  - generic [ref=e418]: ✓
+                  - generic [ref=e419]: 支持笛卡尔积生成所有组合，或智能随机抽取不重复组合
+            - generic [ref=e420]:
+              - heading "三 项目管理与云同步" [level=3] [ref=e421]:
+                - generic [ref=e422]: 三
+                - text: 项目管理与云同步
+              - list [ref=e424]:
+                - listitem [ref=e425]: • 多项目管理：创建多个项目，每个项目独立保存图片、结果、预设等数据
+                - listitem [ref=e426]: • 自动保存：操作过程中自动保存到当前项目
+                - listitem [ref=e427]: • 云端同步：项目数据可同步到 Firestore 云端
+                - listitem [ref=e428]: • 预设同步：自定义预设支持上传/下载到 Google Sheets
+            - generic [ref=e429]:
+              - heading "四 工作流程说明" [level=3] [ref=e430]:
+                - generic [ref=e431]: 四
+                - text: 工作流程说明
+              - list [ref=e433]:
+                - listitem [ref=e434]: • 本工具专注于 Prompt 创作与批量创新
+                - listitem [ref=e435]: • 创新指令可直接使用 Opal 的特定创新/翻版指令
+                - listitem [ref=e436]: • 生成的 Prompt 可直接复制粘贴到 Google Sheets 或对接批量生图插件
+              - generic [ref=e437]:
+                - generic [ref=e438]: 📌
+                - paragraph [ref=e439]: 本工具专注于写词（Prompt 创作），生图由外部工具完成，组合方式更灵活、可扩展性更强。
+          - generic [ref=e440]:
+            - generic [ref=e441]: 点击外部或按"知道了"关闭此弹窗
+            - button "知道了" [ref=e442] [cursor=pointer]
+      - generic:
+        - generic [ref=e443]:
+          - button "🔍 文案查重" [ref=e444] [cursor=pointer]
+          - button "📊 表格查重搜索" [ref=e445] [cursor=pointer]
+        - generic:
+          - generic:
+            - complementary:
+              - generic:
+                - img [ref=e446]
+                - generic [ref=e450]: 文案库
+                - generic [ref=e451]: "0"
+              - generic:
+                - generic:
+                  - generic:
+                    - radio "API Key（只读公开表格）" [checked] [ref=e452] [cursor=pointer]
+                    - text: API Key（只读公开表格）
+                  - generic:
+                    - radio "服务账号（可读写）" [ref=e453] [cursor=pointer]
+                    - text: 服务账号（可读写）
+                  - generic:
+                    - radio "GAS Web App（可读写）⭐" [ref=e454] [cursor=pointer]
+                    - text: GAS Web App（可读写）⭐
+                - generic [ref=e455]: 💡 表格需设为"任何人可查看"
+                - generic:
+                  - textbox "Sheets 链接..." [ref=e456]
+                  - button "连接" [disabled] [ref=e457] [cursor=pointer]
+              - button "清空本地库" [ref=e458] [cursor=pointer]: 清空本地库
+            - main:
+              - generic [ref=e461]:
+                - button [ref=e462] [cursor=pointer]:
+                  - img [ref=e463]
+                - generic [ref=e467]:
+                  - button "查重" [ref=e468] [cursor=pointer]:
+                    - img [ref=e469]
+                    - text: 查重
+                  - button "搜索" [ref=e471] [cursor=pointer]:
+                    - img [ref=e472]
+                    - text: 搜索
+                  - button "分类" [ref=e475] [cursor=pointer]:
+                    - img [ref=e476]
+                    - text: 分类
+                  - button "AI分类" [ref=e479] [cursor=pointer]:
+                    - img [ref=e480]
+                    - text: AI分类
+                - textbox "粘贴文案（每行一条 或 从表格复制）" [ref=e484]
+                - button "查重" [disabled] [ref=e485]:
+                  - img [ref=e486]
+                  - text: 查重
+                - button "设置" [ref=e488] [cursor=pointer]:
+                  - img [ref=e489]
+              - generic [ref=e492]:
+                - img [ref=e493]
+                - heading "专业文案查重搜索工具" [level=3] [ref=e495]
+                - paragraph [ref=e496]: MinHash + LSH 算法 · 毫秒级处理 · 支持中英文
+                - paragraph [ref=e497]: 粘贴文案开始查重或搜索
+    - button "v3.8.4(2026-04-04 07:28)▾" [ref=e499] [cursor=pointer]:
+      - text: v3.8.4
+      - generic [ref=e500]: (2026-04-04 07:28)
+      - text: ▾
+  - generic [ref=e502]:
+    - generic [ref=e503]:
+      - generic [ref=e504]:
+        - img [ref=e506]
+        - generic [ref=e509]:
+          - heading "功能说明" [level=2] [ref=e510]
+          - paragraph [ref=e511]: 描述词配方工具是做什么的
+      - button "知道了" [ref=e512] [cursor=pointer]
+    - generic [ref=e514]:
+      - generic [ref=e515]:
+        - paragraph [ref=e516]: 📋 更新说明
+        - generic [ref=e517]: 2026.02.14v3.8.0
+        - list [ref=e518]:
+          - listitem [ref=e519]: 🎰 随机代码生成器：新增「文字列表」模式，库条目可切换为文字列表输入；新增「自定义生成组数」（1~50 组），多组时自动生成 for 循环代码。
+          - listitem [ref=e520]: 🔀 新增「判断节点生成器」子标签：生成工作流 Code 节点的 Python 判断代码，支持中文检测、关键词匹配、长度判断、非空判断、自定义条件 5 种类型。
+      - generic [ref=e521]:
+        - paragraph [ref=e522]: 1. 这个工具是做什么的
+        - list [ref=e523]:
+          - listitem [ref=e524]: 把你的成品描述词和成品图，分析整理成一套可复用的"基础指令 + 随机库"。
+          - listitem [ref=e525]: 基础指令负责"如何写最终生图用的描述词"，随机库负责"批量变化描述词中的细节"。
+      - generic [ref=e526]:
+        - paragraph [ref=e527]: 2. 七个标签页分别做什么
+        - list [ref=e528]:
+          - listitem [ref=e529]:
+            - strong [ref=e530]: ✨ 生成
+            - text: ：上传参考图 + 成品描述词 + 常规要求及硬性规则，AI 自动分析并生成基础指令 + 随机库。支持「仅图片自动识图」模式（见下方第5点）。
+          - listitem [ref=e531]:
+            - strong [ref=e532]: 🔬 AI 高级生成
+            - text: ：与「生成」共享输入材料，但使用元素拆分模式——先按元素分类（如背景、主体、服装等）逐一分析每张图片的画面元素，再将这些独立描述转化为随机库的值。适合需要精细控制每个画面元素的场景。
+          - listitem [ref=e533]:
+            - strong [ref=e534]: 📄 优化
+            - text: ：直接粘贴你已有的基础指令和随机库，可进行指令结构化改写、校验修复、同步变量名、导出 Opal 流程等。
+          - listitem [ref=e535]:
+            - strong [ref=e536]: 🧩 AI 扩展类型
+            - text: ：两种模式 — ①「对话扩展」不依赖随机库，直接对话生成扩展值（如"给我 30 个电商场景"）；②「关联随机库扩展」可选，有库时可针对某一列做精准扩展。结果汇总到预览区，可复制或一键追加到随机库。
+          - listitem [ref=e537]:
+            - strong [ref=e538]: 🌍 本地化
+            - text: ：将已有的基础指令和随机库一键本地化到目标国家（如日本、法国等），AI 自动翻译并适配当地文化元素。
+          - listitem [ref=e539]:
+            - strong [ref=e540]: 🏷️ 智能分类
+            - text: ：对随机库数据进行 AI 智能分类，按维度自动归类（如室内/室外、白天/夜晚），可直接应用到代码生成。
+          - listitem [ref=e541]:
+            - strong [ref=e542]: 🎲 代码生成
+            - text: ：包含三个子功能 ——「随机代码生成器」为每个库独立生成随机代码（支持文字列表和自定义组数）；「分类联动代码生成器」根据分类结果生成联动随机代码；「判断节点生成器」生成工作流 Code 节点的 Python 判断代码（支持中文检测、关键词匹配、长度判断等）。
+      - generic [ref=e543]:
+        - paragraph [ref=e544]: 3. 全局平台设置有什么用
+        - list [ref=e545]:
+          - listitem [ref=e546]: 页面上方的全局平台设置按钮（仅在「生成」和「优化」标签页显示）。
+          - listitem [ref=e547]: 它会同时影响 AI 生成的指令框架和优化标签页中的指令结构化。
+          - listitem [ref=e548]: 你可以选择平台预设（通用图片、Nano Banana Pro、通用视频），也可以自定义基础指令框架。
+      - generic [ref=e549]:
+        - paragraph [ref=e550]: 4. 最终可以导出什么
+        - list [ref=e551]:
+          - listitem [ref=e552]: 可复制基础指令。
+          - listitem [ref=e553]: 可复制随机库 TSV（可直接粘贴到 Google Sheets），用于 AI 创作工具包批量写描述词。
+          - listitem [ref=e554]: 可导出 Opal 流程（随机代码 + 完整指令），直接用于 Opal 工作流。
+      - generic [ref=e555]:
+        - paragraph [ref=e556]: 5. 🔍 仅图片自动识图（新功能）
+        - list [ref=e557]:
+          - listitem [ref=e558]: 当你只上传了参考图片、没有提供成品描述词时，开启此功能后系统会自动执行两阶段分析。
+          - listitem [ref=e559]:
+            - strong [ref=e560]: 第一阶段
+            - text: ：AI 先识别每张参考图，为其生成详细的英文描述词（包含主体、场景、构图、风格、光影等细节）。
+          - listitem [ref=e561]:
+            - strong [ref=e562]: 第二阶段
+            - text: ：将识别出的描述词作为"成品描述词样本"，再进行对比分析，提取固定骨架和可变维度，生成完整的基础指令 + 随机库。
+          - listitem [ref=e563]: 此功能默认开启（推荐），你也可以在「参考图片」区域手动关闭，使用原来的纯视觉分析模式。
+      - generic [ref=e564]: 一句话：这个工具可以根据你提供的成品图片和描述词（甚至只有图片），智能生成用于 Opal 工作流的指令和随机库，还支持 AI 扩展类型、本地化、智能分类和随机代码生成。

@@ -1,9 +1,11 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // 检测是否为开发模式
 const isDev = process.env.NODE_ENV === 'development';
 
 contextBridge.exposeInMainWorld('bridge', {
+  // 🔴 Electron v22+ 不再暴露 file.path，需要通过 webUtils 获取拖拽文件路径
+  getFilePath: (file) => webUtils.getPathForFile(file),
   isDev,  // 🔴 暴露开发模式标志
   pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
   scanFolder: (folderPath) => ipcRenderer.invoke('files:scan', folderPath),
@@ -17,15 +19,11 @@ contextBridge.exposeInMainWorld('bridge', {
   authorize: (config) => ipcRenderer.invoke('google:auth', config),
   logout: () => ipcRenderer.invoke('google:logout'),
   getTokenStatus: () => ipcRenderer.invoke('google:token-status'),
+  getAccessToken: () => ipcRenderer.invoke('google:get-access-token'),
   refreshToken: () => ipcRenderer.invoke('google:refresh-token'),
   upload: (payload) => ipcRenderer.invoke('google:upload', payload),
   checkUploadedFiles: (fileIds) => ipcRenderer.invoke('upload:check-duplicates', fileIds),
   renameLocalFiles: (payload) => ipcRenderer.invoke('files:rename-local', payload),
-  fetchReviewEntries: (options) => ipcRenderer.invoke('review:fetch', options),
-  approveReviewEntry: (payload) => ipcRenderer.invoke('review:approve', payload),
-  rejectReviewEntry: (payload) => ipcRenderer.invoke('review:reject', payload),
-  reopenReviewEntry: (payload) => ipcRenderer.invoke('review:reopen', payload),
-  syncReviewEntries: () => ipcRenderer.invoke('review:sync'),
   refreshReviewFiles: (payload) => ipcRenderer.invoke('review:refresh-files', payload),
   moveFilesToFinished: (payload) => ipcRenderer.invoke('review:move-to-finished', payload),
   moveFilesFromFinished: (payload) => ipcRenderer.invoke('review:move-from-finished', payload),
@@ -52,6 +50,7 @@ contextBridge.exposeInMainWorld('bridge', {
     testKey: (apiKey) => ipcRenderer.invoke('ai-naming:test-key', apiKey)
   },
   openExternal: (url) => ipcRenderer.invoke('browser:open', url),
+  openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   openDriveFolder: (folderId) => ipcRenderer.invoke('google:open-drive', folderId),
   showFloatingNotification: (payload) => ipcRenderer.invoke('notification:show', payload),
   fetchSoftwareDirectory: (options) => ipcRenderer.invoke('software:fetch', options),
@@ -103,6 +102,53 @@ contextBridge.exposeInMainWorld('bridge', {
   getFileIndexInfo: () => ipcRenderer.invoke('media:index-info'),
   clearFileIndex: () => ipcRenderer.invoke('media:index-clear'),
   clearUploadState: () => ipcRenderer.invoke('upload:clear-state'),
+
+  // 批量下载
+  download: {
+    start: (payload) => ipcRenderer.invoke('download:start', payload),
+    pause: () => ipcRenderer.invoke('download:pause'),
+    resume: () => ipcRenderer.invoke('download:resume'),
+    stop: () => ipcRenderer.invoke('download:stop'),
+    getProgress: () => ipcRenderer.invoke('download:progress'),
+    pickDir: () => ipcRenderer.invoke('download:pick-dir'),
+    onProgress: (callback) => {
+      ipcRenderer.removeAllListeners('download:progress');
+      ipcRenderer.on('download:progress', (_event, data) => callback?.(data));
+    }
+  },
+
+  // 上传分拣器 — 本地文件
+  localFiles: {
+    pickFolder: (options) => ipcRenderer.invoke('local:pick-folder', options),
+    pickImage: () => ipcRenderer.invoke('local:pick-image'),
+    scanFolder: (folderPath) => ipcRenderer.invoke('local:scan-folder', folderPath),
+    getLocalThumbnail: (filePath, size) => ipcRenderer.invoke('local:thumbnail', filePath, size),
+    copyToFolder: (filePath, targetDir) => ipcRenderer.invoke('local:copy-to-folder', filePath, targetDir),
+    moveToFolder: (filePath, targetDir) => ipcRenderer.invoke('local:move-to-folder', filePath, targetDir),
+    exportPreset: (jsonStr) => ipcRenderer.invoke('local:export-preset', jsonStr),
+    importPreset: () => ipcRenderer.invoke('local:import-preset'),
+    importPresetsMulti: () => ipcRenderer.invoke('local:import-presets-multi'),
+    createFolder: (parentDir, folderName) => ipcRenderer.invoke('local:create-folder', parentDir, folderName),
+    watchFolders: (folders) => ipcRenderer.invoke('local:watch-folders', folders),
+    onFolderRenamed: (callback) => {
+      ipcRenderer.removeAllListeners('local:folder-renamed');
+      ipcRenderer.on('local:folder-renamed', (_e, data) => callback?.(data));
+    },
+    onFolderMissing: (callback) => {
+      ipcRenderer.removeAllListeners('local:folder-missing');
+      ipcRenderer.on('local:folder-missing', (_e, data) => callback?.(data));
+    },
+    onScanProgress: (callback) => {
+      ipcRenderer.removeAllListeners('local:scan-progress');
+      ipcRenderer.on('local:scan-progress', (_e, data) => callback?.(data));
+    },
+  },
+  // 上传分拣器 — 上传到 Drive
+  uploadToDrive: (payload) => ipcRenderer.invoke('upload-organizer:upload', payload),
+  onUploadOrganizerProgress: (callback) => {
+    ipcRenderer.removeAllListeners('upload-organizer:progress');
+    ipcRenderer.on('upload-organizer:progress', (_event, data) => callback?.(data));
+  },
 
   // 每日打卡 Google Sheets 同步
   checkin: {

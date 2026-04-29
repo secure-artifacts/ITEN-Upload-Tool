@@ -13,9 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     permissions:
-      id-token: write
       contents: write
-      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -30,29 +28,34 @@ jobs:
 
       - name: Build Electron App (macOS)
         if: matrix.os == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist:mac
 
       - name: Build Electron App (Windows)
         if: matrix.os == 'windows-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist:win
 
-      - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@v2
+      - name: Upload Artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
         with:
-          subject-path: |
-            dist/*.exe
+          name: electron-macos
+          path: |
             dist/*.dmg
             dist/*.zip
             dist/*.yml
+            dist/*.blockmap
 
-      - name: Upload Artifacts
+      - name: Upload Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: electron-${{ matrix.os }}
+          name: electron-windows
           path: |
             dist/*.exe
-            dist/*.dmg
-            dist/*.zip
             dist/*.yml
             dist/*.blockmap
 

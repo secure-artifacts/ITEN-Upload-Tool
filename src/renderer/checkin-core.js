@@ -125,6 +125,7 @@
         teamDetailDate: null,
         historyDetailMember: null,
         historyDetailDate: null,
+        historyMemberFilter: null,  // 🔴 历史月视图成员筛选
         googleClientId: '',
         sheetsUrl: '',
         sheetName: '每日打卡',
@@ -437,11 +438,12 @@
                 if (result?.success) {
                     console.log('[Checkin] Firebase 同步成功');
                 } else {
-                    showToast('⚠️ 云端同步失败', 4000);
-                    console.warn('[Checkin] Firebase 同步返回失败:', result?.error);
+                    const reason = result?.error || '未知原因';
+                    showToast(`⚠️ 云端同步失败: ${reason}`, 5000);
+                    console.warn('[Checkin] Firebase 同步返回失败:', reason);
                 }
             }).catch(e => {
-                showToast('⚠️ 云端同步出错', 4000);
+                showToast(`⚠️ 云端同步出错: ${e.message || '网络异常'}`, 5000);
                 console.warn('[Checkin] Firebase 自动同步失败:', e);
             });
         }
@@ -867,12 +869,35 @@
             remoteRecords.forEach(remoteRecord => {
                 const key = getTeamKey(remoteRecord);
                 const prevRecord = previousMap.get(key);
+
+                // 🔴 修复：检查记录锁定，刚打卡30秒内不被远程数据覆盖
+                const rTeam = normalizeTeamName(remoteRecord.teamName || 'default');
+                const isLocked = lockedRecords.get(`${remoteRecord.date}|${remoteRecord.userName}|${rTeam}`);
+                if (isLocked && Date.now() < isLocked) {
+                    // 被锁定的记录，保留本地版本
+                    if (prevRecord) nextMap.set(key, prevRecord);
+                    return;
+                }
+
                 if (!prevRecord) {
                     added += 1;
                 } else if ((remoteRecord.updatedAt || 0) > (prevRecord.updatedAt || 0)) {
                     updated += 1;
                 }
                 nextMap.set(key, remoteRecord);
+            });
+
+            // 🔴 修复：保留本地独有的记录（还没同步到 Firebase 的新打卡）
+            previousMap.forEach((localRecord, key) => {
+                if (!nextMap.has(key)) {
+                    const lTeam = normalizeTeamName(localRecord.teamName || 'default');
+                    const lockKey = `${localRecord.date}|${localRecord.userName}|${lTeam}`;
+                    const isLocked = lockedRecords.get(lockKey);
+                    if (isLocked && Date.now() < isLocked) {
+                        nextMap.set(key, localRecord);
+                        console.log(`[Checkin] 保留本地未同步记录: ${key}`);
+                    }
+                }
             });
 
             state.teamRecords = Array.from(nextMap.values());
@@ -1198,8 +1223,8 @@
         if (!updated) return;
         saveToStorage();
 
-        // 同步到 Firebase
-        await syncCurrentRecord();
+        // updateRecord 已自动保存到 Firebase，这里仅触发防抖的 Sheets 同步
+        autoSyncToSheets();
 
         console.log(`[Checkin] 更新 ${slotKey} 任务完成量: ${taskCount}`);
     }

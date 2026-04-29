@@ -4,7 +4,7 @@
 (function () {
     'use strict';
     const C = window.CheckinCore;
-    const { state, AttendanceStatus, getActiveRecord, updateRecord, saveToStorage, formatDate, isPastDate, showToast, getDynamicSlotConfig } = C;
+    const { state, AttendanceStatus, getActiveRecord, updateRecord, saveToStorage, formatDate, isPastDate, showToast, getDynamicSlotConfig, normalizeTeamName } = C;
 
     // 打卡
     function handlePunch(slotKey) {
@@ -143,8 +143,8 @@
         // 使用 date + userName 组合匹配记录，避免修改他人数据
         // 🔴 修复：优先从 teamRecords（Firebase 实时监听）中获取数据
         const userName = state.profile.name;
-        const teamName = state.profile.teamName || 'default';
-        const allRecords = (state.teamRecords || []).filter(r => (r.teamName || 'default') === teamName);
+        const teamName = normalizeTeamName(state.profile.teamName || 'default');
+        const allRecords = (state.teamRecords || []).filter(r => normalizeTeamName(r.teamName || 'default') === teamName);
         let record = allRecords.find(r => r.date === targetDate && r.userName === userName);
         if (!record) {
             record = {

@@ -50,9 +50,14 @@ const REVIEW_ACK_STORAGE_KEY = 'art-autoform-ack-records';
 const REVIEW_SORT_STORAGE_KEY = 'art-autoform-review-sort';
 const MY_REVIEW_SORT_STORAGE_KEY = 'art-autoform-myreview-sort';
 const REVIEW_SORT_MODES = ['priority', 'date-desc', 'date-asc', 'category-asc', 'category-desc'];
-const REVIEW_RANGE_MODES = ['10d', 'all'];
+const REVIEW_RANGE_MODES = ['10d', 'month', 'all'];
 const REVIEW_ALL_PAGE_SIZE = 12;
 const REVIEW_RANGE_STORAGE_KEY = 'art-autoform-review-range';
+const REVIEW_MONTH_STORAGE_KEY = 'art-autoform-review-month';
+const REVIEW_COLLAPSE_ALL_STORAGE_KEY = 'art-autoform-review-collapse-all';
+const REVIEW_HOVER_PREVIEW_STORAGE_KEY = 'art-autoform-review-hover-preview';
+const REVIEW_GLOBAL_VIEW_SIZE_STORAGE_KEY = 'art-autoform-review-global-view-size';
+const REVIEW_TOOLBAR_COLLAPSED_STORAGE_KEY = 'art-autoform-review-toolbar-collapsed';
 const SUBMITTER_STORAGE_KEY = 'art-autoform-last-submitter';
 const RENAME_LOCAL_STORAGE_KEY = 'art-autoform-rename-local';
 const USER_ROLE_STORAGE_KEY = 'art-autoform-user-role';
@@ -131,7 +136,7 @@ const MIN_ZOOM_FACTOR = 0.7;
 const MAX_ZOOM_FACTOR = 1.3;
 const HIDE_SOFTWARE_REVIEW = true;
 const HIDE_GROUP_MEDIA = true;
-const APP_VIEWS = ['notice-board', 'upload', 'my-review', 'review', 'group-media', 'daily-checkin', 'settings'];
+const APP_VIEWS = ['notice-board', 'upload', 'my-review', 'review', 'group-media', 'daily-checkin', 'task-planner', 'drive-organizer', 'settings'];
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const REVIEW_RANGE_LABELS = {
   today: '当天',
@@ -370,11 +375,18 @@ const elements = {
     notes: document.getElementById('software-form-notes')
   },
   reviewList: document.getElementById('review-list'),
+  reviewBatchSearch: document.getElementById('review-batch-search'),
   reviewSortMode: document.getElementById('review-sort-mode'),
   reviewRangeMode: document.getElementById('review-range-mode'),
+  reviewMonthPicker: document.getElementById('review-month-picker'),
+  reviewMonthPickerWrap: document.getElementById('review-month-picker-wrap'),
+  reviewGlobalViewSize: document.getElementById('review-global-view-size'),
   reviewPagination: document.getElementById('review-pagination'),
   reviewStatusSummary: document.getElementById('review-status-summary'),
   refreshReview: document.getElementById('refresh-review'),
+  reviewCollapseAll: document.getElementById('review-collapse-all'),
+  reviewHoverPreviewToggle: document.getElementById('review-hover-preview-toggle'),
+  reviewToolbarToggle: document.getElementById('review-toolbar-toggle'),
   checkDataConflicts: document.getElementById('check-data-conflicts'),
   syncReview: document.getElementById('sync-review'),
   userRole: document.getElementById('user-role'),
@@ -449,6 +461,12 @@ const state = {
     mode: 'priority'
   },
   reviewRangeMode: '10d',
+  reviewRangeMonth: '',
+  reviewCollapseAll: false,
+  reviewHoverPreviewEnabled: true,
+  reviewGlobalViewSize: 'per-batch',
+  reviewToolbarCollapsed: true,
+  reviewBatchSearch: '',
   reviewPage: 1,
   reviewLoading: false,
   reviewEntryCache: new Map(),
@@ -1267,6 +1285,12 @@ function getSoftwareReviewBlockReason() {
   return '';
 }
 
+function showReviewViewLoadingHint() {
+  const container = elements.reviewList;
+  if (!container) return;
+  container.innerHTML = '<div class="slot-empty">正在加载审核数据，请稍候...</div>';
+}
+
 function switchAppView(view) {
   let requestedView = APP_VIEWS.includes(view) ? view : 'upload';
   if (HIDE_SOFTWARE_REVIEW && requestedView === 'software-review') {
@@ -1318,7 +1342,13 @@ function switchAppView(view) {
     refreshSoftwareSubmissions({ silent: true });
   }
   if (resolvedView === 'review') {
-    loadReviewEntries({ silent: true });
+    // 先显示加载提示，再异步拉取，避免“切换时无反馈”的感知
+    showReviewViewLoadingHint();
+    window.requestAnimationFrame(() => {
+      loadReviewEntries({ silent: true }).catch((error) => {
+        appendLog({ status: 'error', message: `加载审核数据失败：${error.message}` });
+      });
+    });
   }
 
   // 切换到信息板时，检查是否需要显示更新横幅
@@ -1337,6 +1367,18 @@ function switchAppView(view) {
       }
     };
     setTimeout(() => tryInitCheckin(), 0);
+  }
+
+  // 切换到文件分拣器时，初始化模块
+  if (resolvedView === 'drive-organizer') {
+    const tryInitDO = (attempts = 0) => {
+      if (window.DriveOrganizer && typeof window.DriveOrganizer.init === 'function') {
+        window.DriveOrganizer.init();
+      } else if (attempts < 10) {
+        setTimeout(() => tryInitDO(attempts + 1), 100);
+      }
+    };
+    setTimeout(() => tryInitDO(), 0);
   }
 }
 
@@ -2315,6 +2357,8 @@ function getSlotPresets() {
     referenceFolderPath: slot.referenceFolderPath || '',
     referenceFolderSources: Array.isArray(slot.referenceFolderSources) ? slot.referenceFolderSources : [],
     groupLabel: slot.groupLabel || '',
+    avatar: slot.avatar || '',
+    extraLink: slot.extraLink || '',
     settingsOpen: Boolean(slot.settingsOpen),
     collapsed: Boolean(slot.collapsed),
     viewMode: slot.viewMode || 'upload'
@@ -2522,6 +2566,10 @@ async function bootstrap() {
     restoreAcknowledgementRecords();
     restoreReviewSortPreference();
     restoreReviewRangeMode();
+    restoreReviewCollapseAllMode();
+    restoreReviewHoverPreviewPreference();
+    restoreReviewGlobalViewSizePreference();
+    restoreReviewToolbarCollapsedPreference();
     restoreMyReviewSortPreference();
     restoreSlotViewMode();
     setupReviewInputRefreshGuard();
@@ -2548,9 +2596,77 @@ async function bootstrap() {
     initFileReplaceModal();
     // 初始化批次设置弹窗
     initBatchSettingsModal();
+
+    // 首次使用提醒（只弹一次，点确定后永久保存）
+    showFirstTimeSetupReminder();
   } catch (error) {
     appendLog({ status: 'error', message: error.message });
   }
+}
+
+const SETUP_REMINDER_DISMISSED_KEY = 'art-autoform-setup-reminder-dismissed';
+
+function showFirstTimeSetupReminder() {
+  try {
+    if (localStorage.getItem(SETUP_REMINDER_DISMISSED_KEY)) return;
+  } catch (e) {
+    return; // localStorage 不可用则跳过
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay setup-reminder-overlay';
+  overlay.innerHTML = `
+    <div class="modal-content setup-reminder-modal">
+      <div class="modal-header">
+        <h3>👋 欢迎使用 ITEN 上传工具</h3>
+      </div>
+      <div class="modal-body">
+        <div class="setup-reminder-content">
+          <div class="setup-reminder-step">
+            <span class="setup-reminder-icon">⚙️</span>
+            <div>
+              <strong>导入配置文件</strong>
+              <p>请前往「<a href="#" class="setup-reminder-link" data-action="go-settings">设置页面</a>」，点击「导入配置」按钮导入团队配置文件。</p>
+            </div>
+          </div>
+          <div class="setup-reminder-step">
+            <span class="setup-reminder-icon">👤</span>
+            <div>
+              <strong>联系组长获取配置</strong>
+              <p>如果你还没有配置文件，请联系你的组长获取。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="setup-reminder-btn-settings">前往设置</button>
+        <button type="button" class="setup-reminder-btn-ok">我知道了</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // 点"我知道了"→ 保存标记 + 关闭
+  overlay.querySelector('.setup-reminder-btn-ok').addEventListener('click', () => {
+    try { localStorage.setItem(SETUP_REMINDER_DISMISSED_KEY, '1'); } catch (e) { /* ignore */ }
+    overlay.remove();
+  });
+
+  // 点"前往设置"→ 保存标记 + 关闭 + 跳转设置
+  overlay.querySelector('.setup-reminder-btn-settings').addEventListener('click', () => {
+    try { localStorage.setItem(SETUP_REMINDER_DISMISSED_KEY, '1'); } catch (e) { /* ignore */ }
+    overlay.remove();
+    switchAppView('settings');
+  });
+
+  // 内联"设置页面"链接
+  overlay.querySelector('.setup-reminder-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    try { localStorage.setItem(SETUP_REMINDER_DISMISSED_KEY, '1'); } catch (e2) { /* ignore */ }
+    overlay.remove();
+    switchAppView('settings');
+  });
 }
 
 function restoreSlotPresets(presets = null) {
@@ -2814,6 +2930,14 @@ function switchSlotView(mode) {
   if (elements.viewReview) {
     elements.viewReview.classList.toggle('active', mode === 'review');
   }
+  // 隐藏分拣上传面板
+  const sortPanel = document.getElementById('sort-upload-panel');
+  if (sortPanel) sortPanel.style.display = 'none';
+  const sortBtn = document.getElementById('view-sort-upload');
+  if (sortBtn) sortBtn.classList.remove('active');
+  const catPanel = document.getElementById('category-panel');
+  if (catPanel) catPanel.style.display = '';
+
   if (mode === 'review' && !state.reviewEntries.length && !state.reviewLoading) {
     loadReviewEntries();
   }
@@ -3258,7 +3382,6 @@ function applyBasicConfigValues(config = {}) {
   }
   elements.sheetId.value = next.sheetId;
   elements.sheetRange.value = next.sheetRange;
-  elements.reviewRange.value = next.reviewRange;
   elements.categoryRange.value = next.categoryRange;
   if (elements.softwareSheetId) {
     elements.softwareSheetId.value = next.softwareSheetId;
@@ -3579,22 +3702,21 @@ async function handleResetAllConfig() {
 
 function updateAuthStatus() {
   if (state.authorized) {
-    // 显示已授权 + 用户邮箱
+    // 显示已授权（邮箱仅 hover 显示）
     const email = state.currentUserEmail || '';
-    if (email) {
-      elements.authStatus.textContent = `已授权 (${email})`;
-      elements.authStatus.title = `已授权：${email}`;
-    } else {
-      elements.authStatus.textContent = '已授权';
-      elements.authStatus.title = '已授权';
-    }
+    elements.authStatus.textContent = '已授权';
+    elements.authStatus.title = email ? `已授权：${email}` : '已授权';
     elements.authStatus.classList.add('online');
     elements.authStatus.classList.remove('offline');
+    // 🔴 已授权后隐藏登录按钮，避免顶栏拥挤
+    elements.authorizeBtn.hidden = true;
   } else {
     elements.authStatus.textContent = '未授权';
     elements.authStatus.title = '点击登录 Google';
     elements.authStatus.classList.remove('online');
     elements.authStatus.classList.add('offline');
+    // 🔴 未授权时显示登录按钮
+    elements.authorizeBtn.hidden = false;
   }
 }
 
@@ -3627,6 +3749,8 @@ function addSlot(preset = {}) {
     folderNamingPresetId: preset.folderNamingPresetId || '',
     skipCreateSubfolder: Boolean(preset.skipCreateSubfolder),
     groupLabel: preset.groupLabel || '',
+    avatar: preset.avatar || '',
+    extraLink: preset.extraLink || '',
     settingsOpen: Boolean(preset.settingsOpen),
     viewMode: preset.viewMode || 'upload',
     reviewEnabled:
@@ -3939,6 +4063,51 @@ function getSlot(slotId) {
 function setSlotView(slotId, view = 'upload') {
   const slot = getSlot(slotId);
   if (!slot) return;
+
+  // When leaving settings view, flush all current form values to slot
+  if (slot.viewMode === 'settings' && view !== 'settings') {
+    const card = document.querySelector(`.slot-card[data-slot-id="${slotId}"]`);
+    if (card) {
+      const settingsView = card.querySelector('.slot-settings-view');
+      if (settingsView) {
+        // Group label
+        const groupInput = settingsView.querySelector('.slot-group-label');
+        if (groupInput) slot.groupLabel = groupInput.value;
+        // Avatar
+        const avatarInput = settingsView.querySelector('.slot-avatar-input');
+        if (avatarInput) slot.avatar = avatarInput.value;
+        // Mode
+        const modeSelect = settingsView.querySelector('.slot-mode');
+        if (modeSelect) slot.mode = modeSelect.value;
+        // Task type
+        const taskSelect = settingsView.querySelector('.slot-task-type');
+        if (taskSelect) {
+          if (taskSelect.value === '__custom__') {
+            const customInput = settingsView.querySelector('.slot-task-type-custom');
+            slot.taskType = customInput?.value?.trim() || slot.taskType;
+          } else {
+            slot.taskType = taskSelect.value;
+          }
+        }
+        // Naming preset
+        const namingSelect = settingsView.querySelector('.slot-naming-rule');
+        if (namingSelect) slot.namingPresetId = namingSelect.value;
+        // Folder naming preset
+        const folderNamingSelect = settingsView.querySelector('.slot-folder-naming');
+        if (folderNamingSelect) slot.folderNamingPresetId = folderNamingSelect.value;
+        // Skip subfolder
+        const skipSub = settingsView.querySelector('.slot-no-subfolder');
+        if (skipSub) slot.skipCreateSubfolder = skipSub.checked;
+        // Review toggle
+        const reviewToggle = settingsView.querySelector('.slot-review-toggle');
+        if (reviewToggle) slot.reviewEnabled = reviewToggle.checked;
+        // Review folder
+        const reviewFolder = settingsView.querySelector('.slot-review-folder-input');
+        if (reviewFolder) slot.reviewFolderLink = reviewFolder.value;
+      }
+    }
+  }
+
   slot.viewMode = view;
   persistSlotPresets();
   updateSlotViewUI(slotId, view);
@@ -4742,8 +4911,26 @@ function getSlotUploadStatus(slot) {
   return { label: '等待上传', className: 'slot-upload-status-waiting' };
 }
 
+function parseImageFormula(val) {
+  if (!val) return '';
+  const m = val.match(/=IMAGE\s*\(\s*"([^"]+)"\s*/i);
+  if (m) return m[1];
+  if (/^https?:\/\//i.test(val)) {
+    const gyazoMatch = val.match(/^https?:\/\/gyazo\.com\/([a-zA-Z0-9]+)/i);
+    if (gyazoMatch) return `https://i.gyazo.com/${gyazoMatch[1]}.png`;
+    return val;
+  }
+  if (/^file:\/\//i.test(val)) return val;
+  
+  // Assume local path, ensure file:// scheme is properly attached
+  let safePath = val.replace(/\\/g, '/');
+  if (!safePath.startsWith('/')) safePath = '/' + safePath;
+  return 'file://' + encodeURI(safePath).replace(/#/g, '%23');
+}
+
 function createSlotMarkup(slot, order) {
   const viewMode = slot.viewMode || 'upload';
+  const avatarSrc = parseImageFormula(slot.avatar || '');
   const mainOptions = renderMainOptions(slot.mainCategory);
   const subOptions = renderSubOptions(slot.mainCategory, slot.subCategory);
   const hasFiles = slot.files.length > 0;
@@ -4937,6 +5124,10 @@ function createSlotMarkup(slot, order) {
               <circle cx="19" cy="19" r="2"></circle>
             </svg>
           </button>
+          ${avatarSrc
+      ? `<img class="slot-avatar" src="${avatarSrc}" onerror="this.style.display='none'" title="头像" />`
+      : `<span class="slot-avatar-placeholder">${(slotTitleValue || slotPlaceholderTitle || '?')[0]}</span>`
+    }
           <span class="slot-title${slotTitleValue ? ' has-custom-name' : ''}" contenteditable="true" data-slot-id="${slot.id}" title="点击修改分类名称" data-edit-hint="点击修改" data-placeholder="${escapeHtml(
     slotPlaceholderTitle
   )}">${escapeHtml(slotTitleValue)}</span>
@@ -5050,6 +5241,13 @@ function createSlotMarkup(slot, order) {
         </div>
         <div class="slot-settings-view${viewMode === 'settings' ? ' active' : ''}" data-slot-id="${slot.id}">
           <div class="slot-settings-grid">
+            <label title="头像">
+              <span>头像</span>
+              <div class="slot-avatar-input-row">
+                <input type="text" class="slot-avatar-input" data-slot-id="${slot.id}" value="${escapeHtml(slot.avatar || '')}" placeholder="图片URL 或 =IMAGE(...)" />
+                ${avatarSrc ? `<img class="slot-avatar-preview" src="${avatarSrc}" />` : ''}
+              </div>
+            </label>
             <label title="分组标签">
               <span>分组标签</span>
               <input type="text" class="slot-group-label" data-slot-id="${slot.id}" value="${escapeHtml(slot.groupLabel || '')}" placeholder="如：活动 / 新闻" />
@@ -5532,6 +5730,17 @@ function bindSlotEvents() {
       }
     });
   });
+  container.querySelectorAll('.slot-avatar-input').forEach((input) => {
+    input.addEventListener('input', (event) => {
+      const slot = getSlot(event.target.dataset.slotId);
+      if (!slot) return;
+      slot.avatar = event.target.value;
+    });
+    input.addEventListener('change', () => {
+      persistSlotPresets();
+      renderSlots();
+    });
+  });
   container.querySelectorAll('.slot-subject').forEach((input) => {
     input.addEventListener('input', (event) => {
       const slot = getSlot(event.target.dataset.slotId);
@@ -5937,7 +6146,11 @@ function bindSlotEvents() {
     };
     if (action === 'start') {
       btn.addEventListener('click', wrap(() => {
-        const slotId = btn.dataset.slotId || null;
+        const slotId = (btn.dataset.slotId || '').trim();
+        if (!slotId) {
+          appendUploadLog({ status: 'error', message: '未找到当前任务卡片标识，请刷新后重试' });
+          return;
+        }
         handleUpload(slotId);
       }));
     }
@@ -6406,10 +6619,14 @@ async function rescanSlotFilesFromSources(slot, options = {}) {
   }
 }
 
-async function ensureSlotFilesSyncedWithSources() {
-  const slotsNeedingSync = state.slots.filter(
-    (slot) => hasValidSources(slot.folderSources) || (slot.reviewEnabled && hasValidSources(slot.referenceFolderSources))
-  );
+async function ensureSlotFilesSyncedWithSources(slotIds = null) {
+  const slotIdSet = Array.isArray(slotIds) && slotIds.length ? new Set(slotIds) : null;
+  const slotsNeedingSync = state.slots.filter((slot) => {
+    if (slotIdSet && !slotIdSet.has(slot.id)) {
+      return false;
+    }
+    return hasValidSources(slot.folderSources) || (slot.reviewEnabled && hasValidSources(slot.referenceFolderSources));
+  });
   if (!slotsNeedingSync.length) {
     return false;
   }
@@ -6484,7 +6701,7 @@ function setupDropZone(card, slotId) {
       return;
     }
     const files = Array.from(event.dataTransfer?.files || []);
-    const paths = files.map((file) => file.path).filter(Boolean);
+    const paths = files.map((file) => window.bridge.getFilePath?.(file) || file.path || '').filter(Boolean);
     if (!paths.length) {
       return;
     }
@@ -6536,7 +6753,7 @@ function setupReferenceDropZone(container, slotId) {
       return;
     }
     const files = Array.from(event.dataTransfer?.files || []);
-    const paths = files.map((file) => file.path).filter(Boolean);
+    const paths = files.map((file) => window.bridge.getFilePath?.(file) || file.path || '').filter(Boolean);
     if (!paths.length) {
       return;
     }
@@ -6727,7 +6944,7 @@ function deriveSheetName(rangeValue, fallback) {
 
 function gatherConfigFromForm() {
   const sheetRangeValue = elements.sheetRange.value.trim() || 'Uploads!A:J';
-  const reviewRangeValue = elements.reviewRange.value.trim() || '审核记录';
+  const reviewRangeValue = (state.config.reviewRange || '审核记录').trim() || '审核记录';
   const categoryRangeValue = elements.categoryRange.value.trim() || '数据验证!A2:C';
   const softwareAdmins = Array.isArray(state.config.softwareAdmins) ? state.config.softwareAdmins : [];
   return {
@@ -6809,9 +7026,20 @@ function updateNamingPreview() {
 async function handleUpload(targetSlotId = null) {
   console.log('🔍 handleUpload 被调用，targetSlotId:', targetSlotId, 'type:', typeof targetSlotId);
 
-  // 确保 targetSlotId 是字符串类型，如果是 event 对象则设为 null
-  if (targetSlotId && typeof targetSlotId !== 'string') {
-    targetSlotId = null;
+  // 严格模式：单卡片上传必须传有效 slotId，禁止回退成“全部上传”
+  if (targetSlotId != null && typeof targetSlotId !== 'string') {
+    appendUploadLog({ status: 'error', message: '上传目标无效，请从任务卡片点击“确认上传”重试' });
+    return;
+  }
+  if (typeof targetSlotId === 'string') {
+    targetSlotId = targetSlotId.trim();
+    if (!targetSlotId) {
+      targetSlotId = null;
+    }
+  }
+  if (targetSlotId && !getSlot(targetSlotId)) {
+    appendUploadLog({ status: 'error', message: '目标任务卡片不存在，可能已被删除，请刷新后重试' });
+    return;
   }
 
   // 如果当前有上传任务，加入队列
@@ -6845,7 +7073,7 @@ async function handleUpload(targetSlotId = null) {
     appendUploadLog({ status: 'error', message: '请先填写提交人' });
     return;
   }
-  const filesSynced = await ensureSlotFilesSyncedWithSources();
+  const filesSynced = await ensureSlotFilesSyncedWithSources(targetSlotId ? [targetSlotId] : null);
 
   // 如果指定了targetSlotId,只检查该slot;否则检查所有slot
   const slotsToCheck = targetSlotId
@@ -7223,12 +7451,35 @@ async function handleUpload(targetSlotId = null) {
         message: `上传完成：成功 ${successCount}，失败 ${errorCount}，重复跳过 ${dedupeResult.skipped} `
       });
     }
+    let finalResult = result;
+    if (Array.isArray(result)) {
+      const seenIds = new Set(result.map((item) => item.fileId).filter(Boolean));
+      finalResult = [...result];
+      slotsWithFiles.forEach((slot) => {
+        slot.files?.forEach((file) => {
+          if (seenIds.has(file.id)) return;
+          const info = slot.fileStatuses?.get(file.id);
+          if (info && ['success', 'skipped', 'error'].includes(info.status)) {
+            finalResult.push({
+              status: info.status,
+              slotId: slot.id,
+              fileId: file.id,
+              name: file.name,
+              message: info.message || statusLabels[info.status] || ''
+            });
+            seenIds.add(file.id);
+          }
+        });
+      });
+    }
     autoClearUploadedFiles(slotsWithFiles);
+    return finalResult;
   } catch (error) {
     appendUploadLog({ status: 'error', message: `上传失败：${error.message} ` });
     state.uploadState = 'idle';
     updateUploadControls();
     renderSlots();
+    return null;
   } finally {
     // 上传完成后处理队列中的下一个任务
     processUploadQueue();
@@ -7956,6 +8207,148 @@ function normalizeReviewRangeMode(mode) {
   return REVIEW_RANGE_MODES.includes(mode) ? mode : '10d';
 }
 
+function getCurrentYearMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+function normalizeReviewRangeMonth(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}$/.test(text)) {
+    return text;
+  }
+  return getCurrentYearMonth();
+}
+
+function parseReviewRangeMonth(value) {
+  const normalized = normalizeReviewRangeMonth(value);
+  const [yearText, monthText] = normalized.split('-');
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  return { year, monthIndex, normalized };
+}
+
+function getMonthlyReviewRange(selectedMonth = '') {
+  const { year, monthIndex, normalized } = parseReviewRangeMonth(selectedMonth);
+  const start = new Date(year, monthIndex - 1, 23, 0, 0, 0, 0);
+  const end = new Date(year, monthIndex, 22, 23, 59, 59, 999);
+  return { start, end, normalized };
+}
+
+function formatMonthRangeLabel(selectedMonth = '') {
+  const { start, end } = getMonthlyReviewRange(selectedMonth);
+  const fmt = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  return `${fmt(start)} 至 ${fmt(end)}`;
+}
+
+function ensureReviewRangeMonthInitialized() {
+  state.reviewRangeMonth = normalizeReviewRangeMonth(state.reviewRangeMonth);
+}
+
+function setReviewRangeMonth(value, options = {}) {
+  const { skipRender = false, skipPersist = false } = options;
+  state.reviewRangeMonth = normalizeReviewRangeMonth(value);
+  state.reviewPage = 1;
+  updateReviewRangeControls();
+  if (!skipPersist) {
+    persistReviewRangeMonth(state.reviewRangeMonth);
+  }
+  if (!skipRender) {
+    renderFileReviewEntries();
+  }
+}
+
+function getReviewRangeEmptyHint(mode) {
+  if (mode === 'all') return '暂无待审核记录';
+  if (mode === 'month') return `${formatMonthRangeLabel(state.reviewRangeMonth)} 暂无待审核记录`;
+  return '最近 10 天内暂无待审核记录';
+}
+
+function updateReviewCollapseAllControl() {
+  const btn = elements.reviewCollapseAll;
+  if (!btn) return;
+  const enabled = Boolean(state.reviewCollapseAll);
+  btn.textContent = enabled ? '展开全部' : '批量折叠';
+  btn.title = enabled ? '恢复显示完整审核卡片' : '只保留批次ID、提交人、文件命名和文件夹链接';
+  btn.classList.toggle('active', enabled);
+}
+
+function persistReviewCollapseAllMode(enabled) {
+  try {
+    localStorage.setItem(REVIEW_COLLAPSE_ALL_STORAGE_KEY, enabled ? '1' : '0');
+  } catch (error) {
+    console.error('Failed to save review collapse-all preference', error);
+  }
+}
+
+function restoreReviewCollapseAllMode() {
+  try {
+    state.reviewCollapseAll = localStorage.getItem(REVIEW_COLLAPSE_ALL_STORAGE_KEY) === '1';
+  } catch (error) {
+    console.error('Failed to restore review collapse-all preference', error);
+    state.reviewCollapseAll = false;
+  }
+  updateReviewCollapseAllControl();
+}
+
+function setReviewCollapseAllMode(enabled, options = {}) {
+  const { skipPersist = false, skipRender = false } = options;
+  state.reviewCollapseAll = Boolean(enabled);
+  updateReviewCollapseAllControl();
+  if (!skipPersist) {
+    persistReviewCollapseAllMode(state.reviewCollapseAll);
+  }
+  if (!skipRender) {
+    renderFileReviewEntries();
+  }
+}
+
+function getMonthlyRangeMatch(date, selectedMonth = '') {
+  const { start, end } = getMonthlyReviewRange(selectedMonth);
+  const ts = date.getTime();
+  return ts >= start.getTime() && ts <= end.getTime();
+}
+
+function isDateInReviewRange(date, mode) {
+  if (!date) return true;
+  if (mode === 'all') return true;
+  const ts = date.getTime();
+  if (mode === 'month') {
+    return getMonthlyRangeMatch(date, state.reviewRangeMonth);
+  }
+  const cutoff = Date.now() - 10 * DAY_IN_MS;
+  return ts >= cutoff;
+}
+
+function filterFileReviewBatchesByRange(batches = []) {
+  const mode = normalizeReviewRangeMode(state.reviewRangeMode);
+  if (mode === 'all') {
+    return batches;
+  }
+  return batches.filter((batch) => {
+    const date = parseFlexibleDate(batch.submitTime || '');
+    return isDateInReviewRange(date, mode);
+  });
+}
+
+function filterReviewEntriesByRange(entries = []) {
+  const mode = normalizeReviewRangeMode(state.reviewRangeMode);
+  if (mode === 'all') {
+    return entries;
+  }
+  return entries.filter((entry) => {
+    const date = getEntryCompletedDate(entry);
+    return isDateInReviewRange(date, mode);
+  });
+}
+
 function prioritizeReviewEntries(entries = []) {
   const mode = normalizeReviewSortMode(state.reviewSort?.mode || 'priority');
   if (mode === 'date-desc') {
@@ -7986,21 +8379,6 @@ function prioritizeReviewEntries(entries = []) {
     }
   });
   return [...buckets.feedback, ...buckets.pending, ...buckets.approved, ...buckets.others];
-}
-
-function filterReviewEntriesByRange(entries = []) {
-  const mode = normalizeReviewRangeMode(state.reviewRangeMode);
-  if (mode === 'all') {
-    return entries;
-  }
-  const cutoff = Date.now() - 10 * DAY_IN_MS;
-  return entries.filter((entry) => {
-    const date = getEntryCompletedDate(entry);
-    if (!date) {
-      return true;
-    }
-    return date.getTime() >= cutoff;
-  });
 }
 
 // === 新审核流程：按文件审核面板 ===
@@ -10044,6 +10422,7 @@ function renderFileReviewEntries() {
   console.log('🔄 [renderFileReviewEntries] 被调用', new Error().stack?.split('\n').slice(1, 4).join(' ← '));
   const container = elements.reviewList;
   if (!container) return;
+  container.classList.toggle('review-collapse-all', Boolean(state.reviewCollapseAll));
   const activeNoteSnapshot = captureActiveNoteInput();
   const selectionSnapshot = state.fileReviewSelections ? new Map(state.fileReviewSelections) : null;
 
@@ -10051,15 +10430,28 @@ function renderFileReviewEntries() {
 
   if (state.fileReviewLoading) {
     container.innerHTML = '<div class="slot-empty">审核数据加载中，请稍候...</div>';
+    // 强制清除签名，这样加载完成后必定会重新渲染 DOM，而不是因为签名相同跳过，导致界面卡在加载提示上
+    state._lastReviewRenderSignature = null;
     return;
   }
 
-  const batches = state.fileReviewBatches || [];
+  const allBatches = state.fileReviewBatches || [];
+  const batches = filterFileReviewBatchesByRange(allBatches);
+  const searchKeyword = (state.reviewBatchSearch || '').trim().toLowerCase();
+  const searchFilteredBatches = searchKeyword
+    ? batches.filter((batch) => String(batch.batchId || '').toLowerCase().includes(searchKeyword))
+    : batches;
+  const rangeMode = normalizeReviewRangeMode(state.reviewRangeMode);
+  const sortMode = normalizeReviewSortMode(state.reviewSort?.mode || 'priority');
   cleanupExpiredBatchLocks();
   cleanupExpiredBatchStoreLocks();
 
   // ========== 智能渲染：计算批次签名，避免不必要的重新渲染 ==========
-  const currentSignature = computeBatchesSignature(batches, state.reviewStatusFilter);
+  const globalViewSize = normalizeReviewGlobalViewSize(state.reviewGlobalViewSize);
+  const currentSignature = computeBatchesSignature(
+    searchFilteredBatches,
+    `${state.reviewStatusFilter}|${rangeMode}|${sortMode}|${globalViewSize}|search:${searchKeyword}`
+  );
 
   // 如果签名相同，跳过DOM重建（避免闪烁）
   if (state._lastReviewRenderSignature === currentSignature) {
@@ -10072,16 +10464,22 @@ function renderFileReviewEntries() {
   state._lastReviewRenderSignature = currentSignature;
 
   // ========== 状态筛选栏渲染 ==========
-  renderReviewStatusSummary(batches);
+  renderReviewStatusSummary(searchFilteredBatches);
 
   // 获取当前筛选状态
   const statusFilter = state.reviewStatusFilter || 'pending';
 
   // 根据筛选状态过滤批次
-  const filteredBatches = batches.filter(batch => {
+  const filteredBatches = searchFilteredBatches.filter(batch => {
     if (batch.counts.total === 0) return false;
 
     const manualStatus = (batch.batchStatus || '').trim();
+    const hasStoredFiles = Number(batch.counts?.stored || 0) > 0;
+    const isStoredAlignedStatus =
+      manualStatus === '已入库' ||
+      manualStatus === '已审核通过' ||
+      manualStatus === '已完成' ||
+      isPartialBatchStatus(manualStatus);
 
     switch (statusFilter) {
       case 'pending': // 待审核
@@ -10104,6 +10502,8 @@ function renderFileReviewEntries() {
       case 'allStored': // 所有入库（包含已入库+已完成+部分入库）
         return manualStatus === '已入库' || manualStatus === '已完成' || manualStatus === '已审核通过' ||
           isPartialBatchStatus(manualStatus);
+      case 'containsStored': // 含已入库文件，但批次状态未更新入库
+        return hasStoredFiles && !isStoredAlignedStatus;
       case 'cancelled': // 已取消
         return manualStatus === '已取消' || manualStatus === '取消审核' || manualStatus === '已取消审核';
       case 'feedback': // 需要修改
@@ -10115,25 +10515,52 @@ function renderFileReviewEntries() {
     }
   });
 
-  // 将"已更新修改"的批次置顶，便于审核员快速复审
-  // 优先级：整体复审 > 部分复审 > 普通已更新修改 > 其他
-  filteredBatches.sort((a, b) => {
-    const getUpdatePriority = (status) => {
-      const s = (status || '').trim();
-      if (s === '已更新修改(整体)') return 3;  // 最高优先级
-      if (s === '已更新修改(部分)') return 2;
-      if (s.startsWith('已更新修改')) return 1;
-      return 0;
-    };
-    const aUpdated = getUpdatePriority(a.batchStatus);
-    const bUpdated = getUpdatePriority(b.batchStatus);
-    if (aUpdated !== bUpdated) {
-      return bUpdated - aUpdated;
-    }
-    return (b.submitTime || '').localeCompare(a.submitTime || '');
-  });
+  const getUpdatePriority = (status) => {
+    const s = (status || '').trim();
+    if (s === '已更新修改(整体)') return 3;
+    if (s === '已更新修改(部分)') return 2;
+    if (s.startsWith('已更新修改')) return 1;
+    return 0;
+  };
+  const getSubmitTimeTs = (batch) => {
+    const date = parseFlexibleDate(batch?.submitTime || '');
+    return date ? date.getTime() : 0;
+  };
+  const getCategoryLabel = (batch) => `${(batch?.mainCategory || '').trim()} / ${(batch?.subCategory || '').trim()}`;
+
+  if (sortMode === 'date-asc') {
+    filteredBatches.sort((a, b) => getSubmitTimeTs(a) - getSubmitTimeTs(b));
+  } else if (sortMode === 'date-desc') {
+    filteredBatches.sort((a, b) => getSubmitTimeTs(b) - getSubmitTimeTs(a));
+  } else if (sortMode === 'category-asc') {
+    filteredBatches.sort((a, b) => {
+      const cmp = getCategoryLabel(a).localeCompare(getCategoryLabel(b));
+      if (cmp !== 0) return cmp;
+      return getSubmitTimeTs(b) - getSubmitTimeTs(a);
+    });
+  } else if (sortMode === 'category-desc') {
+    filteredBatches.sort((a, b) => {
+      const cmp = getCategoryLabel(b).localeCompare(getCategoryLabel(a));
+      if (cmp !== 0) return cmp;
+      return getSubmitTimeTs(b) - getSubmitTimeTs(a);
+    });
+  } else {
+    // priority：将"已更新修改"置顶，再按提交时间新→旧
+    filteredBatches.sort((a, b) => {
+      const aUpdated = getUpdatePriority(a.batchStatus);
+      const bUpdated = getUpdatePriority(b.batchStatus);
+      if (aUpdated !== bUpdated) {
+        return bUpdated - aUpdated;
+      }
+      return getSubmitTimeTs(b) - getSubmitTimeTs(a);
+    });
+  }
 
   if (!filteredBatches.length) {
+    if (searchKeyword && statusFilter === 'all') {
+      container.innerHTML = `<div class="slot-empty">未找到批次号包含“${escapeHtml(searchKeyword)}”的记录</div>`;
+      return;
+    }
     const emptyMessages = {
       pending: '暂无待审核记录',
       waiting: '暂无等待入库记录',
@@ -10141,6 +10568,7 @@ function renderFileReviewEntries() {
       completed: '暂无不需入库已审核完的记录',
       partial: '暂无部分入库记录',
       allStored: '暂无入库记录',
+      containsStored: '暂无“已入库文件但批次未更新入库”的记录',
       cancelled: '暂无已取消记录',
       feedback: '暂无需要修改的记录',
       all: '暂无任何记录'
@@ -10190,6 +10618,7 @@ function renderReviewStatusSummary(batches) {
     pending: 0,
     waiting: 0,
     stored: 0,
+    containsStored: 0,
     completed: 0,
     partial: 0,
     cancelled: 0,
@@ -10202,6 +10631,15 @@ function renderReviewStatusSummary(batches) {
     counts.total++;
 
     const manualStatus = (batch.batchStatus || '').trim();
+    const hasStoredFiles = Number(batch.counts?.stored || 0) > 0;
+    const isStoredAlignedStatus =
+      manualStatus === '已入库' ||
+      manualStatus === '已审核通过' ||
+      manualStatus === '已完成' ||
+      isPartialBatchStatus(manualStatus);
+    if (hasStoredFiles && !isStoredAlignedStatus) {
+      counts.containsStored++;
+    }
 
     if (manualStatus === '已入库' || manualStatus === '已审核通过') {
       counts.stored++;
@@ -10230,6 +10668,7 @@ function renderReviewStatusSummary(batches) {
     { key: 'stored', label: '已入库', value: counts.stored, className: 'approved' },
     { key: 'completed', label: '不需入库已审核完', value: counts.completed, className: 'completed' },
     { key: 'allStored', label: '所有入库', value: counts.stored + counts.completed + counts.partial, className: 'all-stored' },
+    { key: 'containsStored', label: '含已入库文件但批次未更新入库', value: counts.containsStored, className: 'all-stored' },
     { key: 'cancelled', label: '已取消', value: counts.cancelled, className: 'cancelled' },
     { key: 'all', label: '全部', value: counts.total, className: 'all' }
   ];
@@ -10342,32 +10781,28 @@ function buildFileReviewBatchCard(batch, options = {}) {
   const adminValue = batch.admin || namingMetadata.admin || '';
   const adminName = adminValue || '-';
 
-  // 读取保存的视图大小偏好（提前读取以便在HTML中使用）
-  const viewPrefs = JSON.parse(localStorage.getItem('batchViewSizePrefs') || '{}');
-
-  // 固定区域高度方案：根据图片数量计算最佳的图片大小
-  // 目标是让所有图片在约 200px 高度内显示完整
-  const fileCount = batch.files?.length || 0;
-  const GRID_MAX_HEIGHT = 200; // 目标最大高度
-  const GRID_GAP = 8; // 网格间距
-
-  // 假设区域宽度约 600px，计算每行能放多少张图
-  // 根据图片数量自动选择合适的尺寸
-  let autoViewSize = 'large'; // 110px
-  if (fileCount > 12) {
-    autoViewSize = 'medium'; // 80px，约8列，2行可放16张
-  }
-  if (fileCount > 24) {
-    autoViewSize = 'small'; // 56px，约11列，3行可放33张
-  }
-
-  // 优先使用用户手动设置的偏好，否则使用自动计算的大小
-  const savedViewSize = viewPrefs[batch.batchId] || autoViewSize;
+  const savedViewSize = getEffectiveBatchViewSize(batch);
 
   // 批次的手动状态（审核员可以设置）
   const manualStatus = batch.batchStatus || '';
   const displayStatus = manualStatus || getBatchOverallStatus(batch);
   const displayStatusClass = manualStatus ? getBatchManualStatusClass(manualStatus) : getBatchOverallStatusClass(batch);
+  const shouldCollapse =
+    manualStatus === '已入库' ||
+    manualStatus === '已完成' ||
+    manualStatus === '已审核通过' ||
+    isPartialBatchStatus(manualStatus) ||
+    manualStatus === '已取消' ||
+    manualStatus === '取消审核' ||
+    manualStatus === '已取消审核';
+  const hasStoredFiles = Number(batch.counts?.stored || 0) > 0;
+  const isStoredAlignedStatus =
+    manualStatus === '已入库' ||
+    manualStatus === '已审核通过' ||
+    manualStatus === '已完成' ||
+    isPartialBatchStatus(manualStatus);
+  const needsStoredStatusReminder = hasStoredFiles && !isStoredAlignedStatus;
+  const showInlineStatusTools = true; // 所有批次状态都支持重新设定
 
   // 审核员可选的状态列表
   const reviewerStatusOptions = [
@@ -10402,49 +10837,70 @@ function buildFileReviewBatchCard(batch, options = {}) {
         <button class="btn-edit-batch-settings" data-batch-id="${batch.batchId}" title="修改批次设置">✏️ 修改设置</button>
       </div>
       <div class="review-info-grid">
-        <div class="review-info-item">
-          <span class="info-label">批次ID</span>
-          <span class="info-value batch-id-value">${escapeHtml(batch.batchId)}</span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📌 身份</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">批次ID</span>
+              <span class="info-value batch-id-value">${escapeHtml(batch.batchId)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">提交人</span>
+              <span class="info-value">${escapeHtml(batch.submitter)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">管理员</span>
+              <span class="info-value">${escapeHtml(adminName)}</span>
+            </div>
+          </div>
         </div>
-        <div class="review-info-item">
-          <span class="info-label">提交人</span>
-          <span class="info-value">${escapeHtml(batch.submitter)}</span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📁 内容</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">入库分类</span>
+              <span class="info-value">${escapeHtml(batch.mainCategory)} / ${escapeHtml(batch.subCategory)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">任务类型</span>
+              <span class="info-value">${escapeHtml(getBatchTaskType(batch) || '-')}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">最终文件夹名</span>
+              <span class="info-value">${escapeHtml(finalFolderName)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">文件命名</span>
+              <span class="info-value">${namingDisplay ? escapeHtml(namingDisplay) : '-'}</span>
+            </div>
+          </div>
         </div>
-        <div class="review-info-item">
-          <span class="info-label">管理员</span>
-          <span class="info-value">${escapeHtml(adminName)}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">入库分类</span>
-          <span class="info-value">${escapeHtml(batch.mainCategory)} / ${escapeHtml(batch.subCategory)}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">任务类型</span>
-          <span class="info-value">${escapeHtml(getBatchTaskType(batch) || '-')}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">最终文件夹名</span>
-          <span class="info-value">${escapeHtml(finalFolderName)}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">文件命名</span>
-          <span class="info-value">${namingDisplay ? escapeHtml(namingDisplay) : '-'}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">提交时间</span>
-          <span class="info-value">${batch.submitTime || '-'}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">文件统计</span>
-          <span class="info-value">
-            共 <strong>${batch.counts.total}</strong> 个：
-            <span class="count-pending">待审 ${batch.counts.pending}</span> |
-            <span class="count-approved">合格 ${batch.counts.approved}</span> |
-            <span class="count-rejected">不合格 ${batch.counts.rejected}</span> |
-            <span class="count-stored">已入库 ${batch.counts.stored}</span>
-          </span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📊 统计</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">提交时间</span>
+              <span class="info-value">${batch.submitTime || '-'}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">文件统计</span>
+              <span class="info-value">
+                共 <strong>${batch.counts.total}</strong> 个：
+                <span class="count-pending">待审 ${batch.counts.pending}</span> |
+                <span class="count-approved">合格 ${batch.counts.approved}</span> |
+                <span class="count-rejected">不合格 ${batch.counts.rejected}</span> |
+                <span class="count-stored">已入库 ${batch.counts.stored}</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+      ${needsStoredStatusReminder ? `
+      <div class="batch-status-reminder">
+        <span class="reminder-icon">⚠</span>
+        <span class="reminder-text">已入库 ${batch.counts.stored} 个文件，请确认并修改本批次状态。</span>
+      </div>
+      ` : ''}
     </div>
   `;
 
@@ -10456,11 +10912,9 @@ function buildFileReviewBatchCard(batch, options = {}) {
   // 如果有链接或者是已完成状态，都显示这个区域
   const linksSectionHtml = (hasLinks || isCompleted) ? `
     <div class="review-section review-links-section">
-      <div class="review-section-header">
+      <div class="review-links-inline">
         <span class="review-section-icon">🔗</span>
         <span class="review-section-title">文件夹链接</span>
-      </div>
-      <div class="review-links-grid">
         ${batch.tempFolderLink ? `
           <button class="folder-link-btn temp-folder open-external-link" 
                   data-url="${batch.tempFolderLink}" 
@@ -10572,18 +11026,20 @@ function buildFileReviewBatchCard(batch, options = {}) {
   const filesSectionHtml = `
     <div class="review-section review-files-section">
       <div class="review-section-header">
-        <span class="review-section-icon">📄</span>
-        <span class="review-section-title">待审核文件 (${batch.files?.length || 0})</span>
-        <div class="review-section-toolbar">
+        <div class="review-section-header-row">
+          <span class="review-section-icon">📄</span>
+          <span class="review-section-title">待审核文件 (${batch.files?.length || 0})</span>
           <div class="view-size-toggle" data-batch-id="${batch.batchId}" title="切换缩略图大小">
             <button class="view-size-btn${savedViewSize === 'large' ? ' active' : ''}" data-size="large" title="大图">◆</button>
             <button class="view-size-btn${savedViewSize === 'medium' ? ' active' : ''}" data-size="medium" title="中图">🔸</button>
             <button class="view-size-btn${savedViewSize === 'small' ? ' active' : ''}" data-size="small" title="小图">🔹</button>
           </div>
-          <button class="btn-tile-view" data-batch-id="${batch.batchId}" title="平铺查看模式 - 类似 PureRef 的大图平铺预览">📐 平铺</button>
-          <span class="toolbar-divider"></span>
+          <button class="btn-tile-view" data-batch-id="${batch.batchId}" title="平铺查看模式">📐 平铺</button>
+        </div>
+        <div class="review-section-actions-row">
           <button class="btn-select-all" data-batch-id="${batch.batchId}" title="全选">☑ 全选</button>
           <button class="btn-select-invert" data-batch-id="${batch.batchId}" title="反选">⇄ 反选</button>
+          <button class="btn-select-pending" data-batch-id="${batch.batchId}" title="选中所有未标记（待审核）文件">○ 选未标记</button>
           <button class="btn-select-rejected" data-batch-id="${batch.batchId}" title="选中所有不合格文件">✗ 选不合格</button>
           <button class="btn-select-none" data-batch-id="${batch.batchId}" title="取消全选">☐ 取消</button>
           <span class="selection-count" data-batch-id="${batch.batchId}">已选 0 个</span>
@@ -10675,21 +11131,17 @@ function buildFileReviewBatchCard(batch, options = {}) {
           <button class="btn-batch-partial-store" data-batch-id="${batch.batchId}" ${batch.counts.approved === 0 ? 'disabled' : ''}>📥 部分入库</button>
           <button class="btn-batch-final-store" data-batch-id="${batch.batchId}" ${batch.counts.approved === 0 ? 'disabled' : ''}>📦 最终入库</button>
         </div>
+        ${needsStoredStatusReminder ? `
+        <div class="batch-status-reminder in-actions">
+          <span class="reminder-icon">⚠</span>
+          <span class="reminder-text">本批次已有文件入库，别忘了同步修改批次状态。</span>
+        </div>
+        ` : ''}
       </div>
     </div>
   `;
 
   // ========== 组装完整卡片 ==========
-  // 判断是否应该折叠（已入库/部分入库/已取消）
-  const shouldCollapse =
-    manualStatus === '已入库' ||
-    manualStatus === '已完成' ||
-    manualStatus === '已审核通过' ||
-    isPartialBatchStatus(manualStatus) ||
-    manualStatus === '已取消' ||
-    manualStatus === '取消审核' ||
-    manualStatus === '已取消审核';
-
   const collapsedClass = shouldCollapse ? ' collapsed' : '';
   const viewSizeClass = ` view-${savedViewSize}`;
 
@@ -11418,6 +11870,11 @@ function setupFileReviewHandlers(container) {
         const batchCard = toggle.closest('.file-review-batch-card');
         if (!batchCard || !size) return;
 
+        // 统一模式下，单卡点击即切回“按卡片单独控制”
+        if (normalizeReviewGlobalViewSize(state.reviewGlobalViewSize) !== 'per-batch') {
+          setReviewGlobalViewSize('per-batch', { skipRender: true });
+        }
+
         // 更新按钮激活状态
         toggle.querySelectorAll('.view-size-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -11846,6 +12303,26 @@ function setupFileReviewHandlers(container) {
         });
         // 选中所有不合格的（被标记为rejected的）
         batchCard.querySelectorAll('.file-card.status-rejected').forEach(card => {
+          card.classList.add('selected');
+        });
+        syncFileReviewSelectionFromDom(batchId, batchCard);
+        updateBatchSelectionCount(batchId, container);
+      }
+    });
+  });
+
+  // 选中未标记按钮 - 选中所有待审核（未标记）文件
+  container.querySelectorAll('.btn-select-pending').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const batchId = e.target.dataset.batchId;
+      const batchCard = container.querySelector(`.file-review-batch-card[data-batch-id="${batchId}"]`);
+      if (batchCard) {
+        // 先取消所有选中
+        batchCard.querySelectorAll('.file-card.selected').forEach(card => {
+          card.classList.remove('selected');
+        });
+        // 选中所有待审核（未标记）文件
+        batchCard.querySelectorAll('.file-card.status-pending').forEach(card => {
           card.classList.add('selected');
         });
         syncFileReviewSelectionFromDom(batchId, batchCard);
@@ -13003,6 +13480,11 @@ async function cacheAnnotatedPreview(fileId, dataUrl) {
 }
 
 function showHoverPreview(fileId, fileName, fileLink, rowNumber, targetElement, fullscreen = false, previewFileId = null) {
+  // 悬浮预览开关关闭时，仅保留点击打开的全屏预览
+  if (!fullscreen && !state.reviewHoverPreviewEnabled) {
+    hideHoverPreview(true);
+    return;
+  }
   hideHoverPreview(true); // 强制隐藏之前的
 
   hoverPreviewData = { fileId, fileName, fileLink, rowNumber, fullscreen, previewFileId };
@@ -15709,7 +16191,7 @@ async function confirmAddFileToBatch() {
       targetFolderId: targetFolderId || '',
       renameCounter: Number.isFinite(renameCounter) ? renameCounter : undefined,
       newFile: {
-        path: currentAddFile.path,
+        path: currentAddFile._resolvedPath || currentAddFile.path,
         name: currentAddFile.name
       }
     });
@@ -15791,6 +16273,10 @@ function closeFileReplaceModal() {
 
 function setReplaceFile(file) {
   if (!file) return;
+  // 🔴 Electron v22+ 兼容：预解析拖拽文件路径
+  if (!file._resolvedPath) {
+    file._resolvedPath = window.bridge.getFilePath?.(file) || file.path || '';
+  }
 
   const modal = document.getElementById('file-replace-modal');
   const isAddMode = modal?.dataset.mode === 'add';
@@ -15873,7 +16359,7 @@ async function confirmFileReplace() {
       mainCategory: batch?.mainCategory || '',
       subCategory: batch?.subCategory || '',
       newFile: {
-        path: currentReplaceFile.path,
+        path: currentReplaceFile._resolvedPath || currentReplaceFile.path,
         name: currentReplaceFile.name
       }
     });
@@ -16182,6 +16668,10 @@ function setupBatchReplaceEvents(container) {
  */
 function selectBatchReplaceFile(index, file) {
   if (state.batchReplaceFiles[index]) {
+    // 🔴 Electron v22+ 兼容：预解析拖拽文件路径
+    if (!file._resolvedPath) {
+      file._resolvedPath = window.bridge.getFilePath?.(file) || file.path || '';
+    }
     state.batchReplaceFiles[index].newFile = file;
     renderBatchReplaceModal();
   }
@@ -16278,7 +16768,7 @@ async function executeFileReplace({ oldFileId, oldFileName, newFile, rowNumber, 
   // 上传新文件
   const result = await window.bridge.uploadFile({
     file: {
-      path: newFile.path,
+      path: newFile._resolvedPath || newFile.path,
       name: newFile.name,
       type: newFile.type,
       size: newFile.size
@@ -16325,7 +16815,7 @@ function renderReviewEntries() {
   if (!rangeFiltered.length) {
     state.reviewPage = 1;
     const rangeMode = normalizeReviewRangeMode(state.reviewRangeMode);
-    const message = rangeMode === 'all' ? '暂无待审核记录' : '最近 10 天内暂无待审核记录';
+    const message = getReviewRangeEmptyHint(rangeMode);
     container.innerHTML = `<div class="slot-empty">${message}</div>`;
     renderReviewPagination();
     renderSubmitterSuggestions();
@@ -16918,7 +17408,7 @@ function setReviewSortMode(mode) {
   state.reviewSort.mode = normalized;
   updateReviewSortControls();
   persistReviewSortPreference(state.reviewSort);
-  renderReviewEntries();
+  renderFileReviewEntries();
 }
 
 function getMyReviewDateRange() {
@@ -17430,16 +17920,7 @@ function buildMyFileReviewBatchCard(batch) {
   const overallStatus = getBatchOverallStatus(batch);
   const statusClass = getBatchOverallStatusClass(batch);
 
-  // 读取保存的视图大小偏好
-  const viewPrefs = JSON.parse(localStorage.getItem('batchViewSizePrefs') || '{}');
-
-  // 固定区域高度方案：根据图片数量计算最佳的图片大小
-  const fileCount = batch.files?.length || 0;
-  let autoViewSize = 'large';
-  if (fileCount > 12) autoViewSize = 'medium';
-  if (fileCount > 24) autoViewSize = 'small';
-
-  const savedViewSize = viewPrefs[batch.batchId] || autoViewSize;
+  const savedViewSize = getEffectiveBatchViewSize(batch);
   const viewSizeClass = ` view-${savedViewSize}`;
 
   // 批次的手动状态（如果有的话用手动状态，否则用计算的状态）
@@ -17468,54 +17949,69 @@ function buildMyFileReviewBatchCard(batch) {
         <button class="btn-edit-batch-settings" data-batch-id="${batch.batchId}" title="修改批次设置">✏️ 修改设置</button>
       </div>
       <div class="review-info-grid">
-        <div class="review-info-item">
-          <span class="info-label">批次ID</span>
-          <span class="info-value batch-id-value">${escapeHtml(batch.batchId)}</span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📌 身份</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">批次ID</span>
+              <span class="info-value batch-id-value">${escapeHtml(batch.batchId)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">提交人</span>
+              <span class="info-value">${escapeHtml(batch.submitter || '-')}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">管理员</span>
+              <span class="info-value">${escapeHtml(adminName)}</span>
+            </div>
+          </div>
         </div>
-        <div class="review-info-item">
-          <span class="info-label">提交人</span>
-          <span class="info-value">${escapeHtml(batch.submitter || '-')}</span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📁 内容</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">入库分类</span>
+              <span class="info-value">${escapeHtml(batch.mainCategory)} / ${escapeHtml(batch.subCategory)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">任务类型</span>
+              <span class="info-value">${escapeHtml(getBatchTaskType(batch) || '-')}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">最终文件夹名</span>
+              <span class="info-value">${escapeHtml(finalFolderName)}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">文件命名</span>
+              <span class="info-value">${namingDisplay ? escapeHtml(namingDisplay) : '-'}</span>
+            </div>
+          </div>
         </div>
-        <div class="review-info-item">
-          <span class="info-label">管理员</span>
-          <span class="info-value">${escapeHtml(adminName)}</span>
+        <div class="review-info-group">
+          <div class="review-info-group-label">📊 统计</div>
+          <div class="review-info-group-items">
+            <div class="review-info-item">
+              <span class="info-label">提交时间</span>
+              <span class="info-value">${batch.submitTime || '-'}</span>
+            </div>
+            <div class="review-info-item">
+              <span class="info-label">文件统计</span>
+              <span class="info-value">
+                共 <strong>${batch.counts.total}</strong> 个：
+                <span class="count-pending">待审 ${batch.counts.pending}</span> |
+                <span class="count-approved">合格 ${batch.counts.approved}</span> |
+                <span class="count-rejected">不合格 ${batch.counts.rejected}</span> |
+                <span class="count-stored">已入库 ${batch.counts.stored}</span>
+              </span>
+            </div>
+            ${batchNoteSummary ? `
+            <div class="review-info-item">
+              <span class="info-label">批次备注</span>
+              <span class="info-value batch-note-highlight">${escapeHtml(batchNoteSummary)}</span>
+            </div>
+            ` : ''}
+          </div>
         </div>
-        <div class="review-info-item">
-          <span class="info-label">入库分类</span>
-          <span class="info-value">${escapeHtml(batch.mainCategory)} / ${escapeHtml(batch.subCategory)}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">任务类型</span>
-          <span class="info-value">${escapeHtml(getBatchTaskType(batch) || '-')}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">最终文件夹名</span>
-          <span class="info-value">${escapeHtml(finalFolderName)}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">文件命名</span>
-          <span class="info-value">${namingDisplay ? escapeHtml(namingDisplay) : '-'}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">提交时间</span>
-          <span class="info-value">${batch.submitTime || '-'}</span>
-        </div>
-        <div class="review-info-item">
-          <span class="info-label">文件统计</span>
-          <span class="info-value">
-            共 <strong>${batch.counts.total}</strong> 个：
-            <span class="count-pending">待审 ${batch.counts.pending}</span> |
-            <span class="count-approved">合格 ${batch.counts.approved}</span> |
-            <span class="count-rejected">不合格 ${batch.counts.rejected}</span> |
-            <span class="count-stored">已入库 ${batch.counts.stored}</span>
-          </span>
-        </div>
-        ${batchNoteSummary ? `
-        <div class="review-info-item">
-          <span class="info-label">批次备注</span>
-          <span class="info-value batch-note-highlight">${escapeHtml(batchNoteSummary)}</span>
-        </div>
-        ` : ''}
       </div>
     </div>
   `;
@@ -17527,9 +18023,42 @@ function buildMyFileReviewBatchCard(batch) {
   // 如果有链接或者是已完成状态，都显示这个区域
   const linksSectionHtml = (hasLinks || isCompleted) ? `
     <div class="review-section review-links-section">
-      <div class="review-section-header">
+      <div class="review-links-inline">
         <span class="review-section-icon">🔗</span>
         <span class="review-section-title">文件夹链接</span>
+        ${batch.tempFolderLink ? `
+          <button class="folder-link-btn temp-folder open-external-link" 
+                  data-url="${batch.tempFolderLink}" 
+                  title="点击在浏览器中打开待审目录">
+            <span class="folder-icon">📁</span>
+            <span class="folder-info">
+              <span class="folder-type">待审目录</span>
+              <span class="folder-hint">上传的原始文件</span>
+            </span>
+            <span class="open-icon">↗</span>
+          </button>
+        ` : ''}
+        ${batch.finalFolderLink ? `
+          <button class="folder-link-btn final-folder open-external-link" 
+                  data-url="${batch.finalFolderLink}" 
+                  title="点击在浏览器中打开入库目录">
+            <span class="folder-icon">📂</span>
+            <span class="folder-info">
+              <span class="folder-type">入库目录</span>
+              <span class="folder-hint">${batch.counts.stored > 0 ? '已入库 ' + batch.counts.stored + ' 个文件' : '审核通过后归档'}</span>
+            </span>
+            <span class="open-icon">↗</span>
+          </button>
+        ` : ''}
+        ${isCompleted && !batch.finalFolderLink ? `
+          <div class="folder-link-placeholder">
+            <span class="folder-icon">✅</span>
+            <span class="folder-info">
+              <span class="folder-type">无需入库</span>
+              <span class="folder-hint">已审核完成，无需入库操作</span>
+            </span>
+          </div>
+        ` : ''}
         <div class="review-section-toolbar">
           <button class="sync-batch-btn" 
                   data-batch-id="${batch.batchId}"
@@ -17570,41 +18099,6 @@ function buildMyFileReviewBatchCard(batch) {
                   data-is-reference="false"
                   title="添加文件">➕ 添加文件</button>
         </div>
-      </div>
-      <div class="review-links-grid">
-        ${batch.tempFolderLink ? `
-          <button class="folder-link-btn temp-folder open-external-link" 
-                  data-url="${batch.tempFolderLink}" 
-                  title="点击在浏览器中打开待审目录">
-            <span class="folder-icon">📁</span>
-            <span class="folder-info">
-              <span class="folder-type">待审目录</span>
-              <span class="folder-hint">上传的原始文件</span>
-            </span>
-            <span class="open-icon">↗</span>
-          </button>
-        ` : ''}
-        ${batch.finalFolderLink ? `
-          <button class="folder-link-btn final-folder open-external-link" 
-                  data-url="${batch.finalFolderLink}" 
-                  title="点击在浏览器中打开入库目录">
-            <span class="folder-icon">📂</span>
-            <span class="folder-info">
-              <span class="folder-type">入库目录</span>
-              <span class="folder-hint">${batch.counts.stored > 0 ? '已入库 ' + batch.counts.stored + ' 个文件' : '审核通过后归档'}</span>
-            </span>
-            <span class="open-icon">↗</span>
-          </button>
-        ` : ''}
-        ${isCompleted && !batch.finalFolderLink ? `
-          <div class="folder-link-placeholder">
-            <span class="folder-icon">✅</span>
-            <span class="folder-info">
-              <span class="folder-type">无需入库</span>
-              <span class="folder-hint">已审核完成，无需入库操作</span>
-            </span>
-          </div>
-        ` : ''}
       </div>
     </div>
   ` : '';
@@ -17664,20 +18158,21 @@ function buildMyFileReviewBatchCard(batch) {
   const filesSectionHtml = `
     <div class="review-section review-files-section">
       <div class="review-section-header">
-        <span class="review-section-icon">📄</span>
-        <span class="review-section-title">提交的文件 (${batch.files?.length || 0})</span>
-        <div class="review-section-toolbar">
+        <div class="review-section-header-row">
+          <span class="review-section-icon">📄</span>
+          <span class="review-section-title">提交的文件 (${batch.files?.length || 0})</span>
           <div class="view-size-toggle" data-batch-id="${batch.batchId}" title="切换缩略图大小">
             <button class="view-size-btn${savedViewSize === 'large' ? ' active' : ''}" data-size="large" title="大图">◆</button>
             <button class="view-size-btn${savedViewSize === 'medium' ? ' active' : ''}" data-size="medium" title="中图">🔸</button>
             <button class="view-size-btn${savedViewSize === 'small' ? ' active' : ''}" data-size="small" title="小图">🔹</button>
           </div>
-          <span class="toolbar-divider"></span>
+        </div>
+        <div class="review-section-actions-row">
           <button class="btn-select-all" data-batch-id="${batch.batchId}" title="全选">☑ 全选</button>
           <button class="btn-select-invert" data-batch-id="${batch.batchId}" title="反选">⇄ 反选</button>
           <button class="btn-select-all-rejected" data-batch-id="${batch.batchId}" title="选中所有不合格文件">选中不合格</button>
           <button class="btn-select-none" data-batch-id="${batch.batchId}" title="取消全选">☐ 取消</button>
-          <span class="selection-divider"></span>
+          <span class="toolbar-divider"></span>
           <button class="btn-batch-replace" data-batch-id="${batch.batchId}" title="批量替换选中的文件" disabled>🔄 批量替换</button>
           <span class="selection-count" data-batch-id="${batch.batchId}">已选 0 个</span>
         </div>
@@ -18433,6 +18928,10 @@ function setupMyFileReviewHandlers(container) {
         const batchId = toggle.dataset.batchId;
         const batchCard = toggle.closest('.file-review-batch-card');
         if (!batchCard || !size) return;
+
+        if (normalizeReviewGlobalViewSize(state.reviewGlobalViewSize) !== 'per-batch') {
+          setReviewGlobalViewSize('per-batch', { skipRender: true });
+        }
 
         // 更新按钮active状态
         toggle.querySelectorAll('.view-size-btn').forEach(b => b.classList.remove('active'));
@@ -20601,57 +21100,8 @@ async function loadReviewEntries(arg = {}) {
   } else if (typeof arg === 'object' && arg) {
     options = { ...options, ...arg };
   }
-  const { logSuccess, silent } = options;
-
-  // 使用按文件审核模式加载
+  // 统一使用按文件审核流程
   await loadFileReviewEntries(options);
-  return;
-
-  if (!state.config.sheetId) {
-    if (!silent) {
-      appendLog({ status: 'error', message: '请先在配置中填写 Sheet ID' });
-    }
-    return;
-  }
-  if (!window.bridge?.fetchReviewEntries) {
-    return;
-  }
-  if (!silent) {
-    state.reviewLoading = true;
-    renderReviewEntries();
-  }
-  try {
-    const entries = await window.bridge.fetchReviewEntries({ preferDerived: true });
-    enhanceReviewEntries(entries);
-    state.reviewEntries = entries;
-    pruneObsoleteDrafts(entries.map((entry) => entry.rowNumber));
-    if (logSuccess) {
-      appendLog({
-        status: 'success',
-        message: `已加载 ${entries.length} 条审核记录`,
-        broadcastGlobal: true
-      });
-    }
-    handleReviewNotifications(entries);
-  } catch (error) {
-    appendLog({ status: 'error', message: `加载审核记录失败：${error.message}` });
-  } finally {
-    if (!silent) {
-      state.reviewLoading = false;
-    }
-
-    // 智能刷新：检查是否有用户正在选择文件
-    const hasActiveSelections = hasAnyFileSelections();
-
-    if (silent && hasActiveSelections) {
-      // 静默刷新且有选中文件时，不重新渲染，避免丢失选择状态
-      // 不显示提示，只是静默跳过
-      console.log('⏸️ 检测到有选中文件，暂停自动渲染');
-    } else {
-      // 正常渲染
-      renderReviewEntries();
-    }
-  }
 }
 
 /**
@@ -20743,7 +21193,7 @@ function showPendingRefreshHint() {
     if (state.reviewFileSelections) {
       state.reviewFileSelections.clear();
     }
-    renderReviewEntries();
+    renderFileReviewEntries();
   };
 }
 
@@ -20972,252 +21422,38 @@ function setupReviewInputRefreshGuard() {
 }
 
 async function handleApproveReview(rowNumber, noteOverride = null) {
-  const entry = getReviewEntry(rowNumber);
-  if (!entry) {
-    appendLog({ status: 'error', message: '未找到该审核记录' });
-    return;
-  }
-  const reviewer = getSubmitterName();
-  if (!reviewer) {
-    appendLog({ status: 'error', message: '请先填写提交人姓名作为审核人' });
-    elements.metadata.submitter?.focus();
-    return;
-  }
-  const noteInput = document.querySelector(`.review-note-input[data-row="${rowNumber}"]`);
-  const note =
-    noteOverride != null ? noteOverride : noteInput ? noteInput.value.trim() : entry.note || '';
-  const acceptedCount = Array.isArray(entry.acceptedDetails) && entry.acceptedDetails.length
-    ? entry.acceptedDetails.length
-    : Array.isArray(entry.acceptedFiles)
-      ? entry.acceptedFiles.length
-      : 0;
-  if (!state.reviewSubmitting) {
-    state.reviewSubmitting = new Set();
-  }
-  if (state.reviewSubmitting.has(rowNumber)) {
-    appendLog({ status: 'info', message: '正在入库，请稍候…' });
-    return;
-  }
-  if (!acceptedCount) {
-    const proceed = await showConfirmationDialog({
-      title: '未检测到合格文件',
-      message: '成品文件夹为空，后端将拒绝入库操作。请确认文件已移入成品文件夹后再试。',
-      confirmText: '尝试继续',
-      cancelText: '取消'
-    });
-    if (!proceed) {
-      return;
-    }
-  }
-
-  const statusSnapshot = updateReviewCardStatusUI(rowNumber, REVIEW_STATUS.APPROVED);
-
-  // 暂停自动刷新，避免操作期间的刷新冲突
-  const autoRefreshWasPaused = !state.reviewPollTimer;
-  if (state.reviewPollTimer) {
-    clearInterval(state.reviewPollTimer);
-    state.reviewPollTimer = null;
-    console.log('⏸️ 已暂停自动刷新（审核操作进行中）');
-  }
-
-  const actionBtn = document.querySelector(`button[data-action="apply-review-status"][data-row="${rowNumber}"]`);
-  const statusSelect = document.querySelector(`.review-status-select[data-row="${rowNumber}"]`);
-  const originalText = actionBtn?.textContent;
-  const previousStatus = entry.status;
-
-  state.reviewSubmitting.add(rowNumber);
-
-  // 立即重新渲染该条目，显示"入库中"状态
-  // renderReviewEntries(); // Removed as per instruction
-
-  if (actionBtn) {
-    actionBtn.disabled = true;
-    actionBtn.classList.add('loading');
-    actionBtn.textContent = '正在入库…';
-  }
-  if (statusSelect) {
-    statusSelect.disabled = true;
-  }
-  appendLog({ status: 'info', message: `正在入库：${entry.mainCategory || ''}/${entry.subCategory || ''}` });
-  try {
-    await window.bridge.approveReviewEntry({ ...entry, note, reviewer });
-
-    // 成功后立即更新本地状态为"已通过"
-    entry.status = '已通过';
-    entry.normalizedStatus = normalizeReviewStatus('已通过');
-    entry.note = note;
-    entry.reviewer = reviewer;
-
-    appendLog({ status: 'success', message: `已通过 ${entry.mainCategory || ''}/${entry.subCategory || ''}` });
-    clearReviewNoteDraft(rowNumber);
-    markActionConfirmed(rowNumber, 'apply-review-status');
-    state.reviewAcknowledged.submitter?.delete?.(getEntryKey(entry));
-    state.reviewAcknowledged.reviewer?.delete?.(getReviewerKey(entry));
-    persistAcknowledgementRecords();
-
-    // 手动刷新一次，此时卡片会根据筛选条件自然消失或保留
-    console.log('🔄 操作完成，手动刷新一次');
-    await loadReviewEntries().catch(err => console.warn('手动刷新失败:', err));
-
-  } catch (error) {
-    // 失败时恢复原状态
-    entry.status = previousStatus;
-    entry.normalizedStatus = normalizeReviewStatus(previousStatus);
-    restoreReviewCardStatusUI(rowNumber, statusSnapshot);
-
-    appendLog({ status: 'error', message: `审核通过失败：${error.message}` });
-    renderReviewEntries();  // 失败时需要重新渲染以恢复UI
-  } finally {
-    state.reviewSubmitting.delete(rowNumber);
-    if (actionBtn) {
-      actionBtn.disabled = false;
-      actionBtn.classList.remove('loading');
-      actionBtn.textContent = originalText || '更新状态';
-    }
-    if (statusSelect) {
-      statusSelect.disabled = false;
-    }
-
-    // 恢复自动刷新（如果之前没有暂停）
-    // 注意：无论当前 activeView 是什么，都应恢复，因为轮询会自动检查视图状态
-    if (!autoRefreshWasPaused) {
-      startReviewPolling();
-      console.log('▶️ 已恢复自动刷新');
-    }
-  }
+  void rowNumber;
+  void noteOverride;
+  appendLog({ status: 'warning', message: '旧版逐条审核流程已下线，请使用总审核面板（按批次）操作。' });
 }
 
 async function handleSuggestionReview(rowNumber, status = REVIEW_STATUS.NEEDS_CHANGE, noteOverride = null) {
-  const entry = getReviewEntry(rowNumber);
-  if (!entry) {
-    appendLog({ status: 'error', message: '未找到该审核记录' });
-    return;
-  }
-  const reviewer = getSubmitterName();
-  if (!reviewer) {
-    appendLog({ status: 'error', message: '请先填写提交人姓名作为审核人' });
-    elements.metadata.submitter?.focus();
-    return;
-  }
-  const noteInput = document.querySelector(`.review-note-input[data-row="${rowNumber}"]`);
-  const note =
-    noteOverride != null ? noteOverride : noteInput ? noteInput.value.trim() : entry.note || '';
-  const previous = {
-    status: entry.status,
-    normalizedStatus: entry.normalizedStatus,
-    note: entry.note,
-    reviewer: entry.reviewer
-  };
-  const statusSnapshot = updateReviewCardStatusUI(rowNumber, status);
-  entry.status = status;
-  entry.normalizedStatus = normalizeReviewStatus(status);
-  entry.note = note;
-  entry.reviewer = reviewer;
-  renderReviewEntries();
-  renderSubmitterSuggestions();
-  try {
-    await window.bridge.rejectReviewEntry({ ...entry, note: note || '', reviewer, status });
-    appendLog({
-      status: 'success',
-      message: `${entry.mainCategory || ''}/${entry.subCategory || ''} 状态更新为 ${status}`
-    });
-    clearReviewNoteDraft(rowNumber);
-    markActionConfirmed(rowNumber, 'apply-review-status');
-    state.reviewAcknowledged.submitter?.delete?.(getEntryKey(entry));
-    state.reviewAcknowledged.reviewer?.delete?.(getReviewerKey(entry));
-    persistAcknowledgementRecords();
-  } catch (error) {
-    restoreReviewCardStatusUI(rowNumber, statusSnapshot);
-    entry.status = previous.status;
-    entry.normalizedStatus = previous.normalizedStatus;
-    entry.note = previous.note;
-    entry.reviewer = previous.reviewer;
-    renderReviewEntries();
-    renderSubmitterSuggestions();
-    appendLog({ status: 'error', message: `记录建议失败：${error.message}` });
-  }
+  void rowNumber;
+  void status;
+  void noteOverride;
+  appendLog({ status: 'warning', message: '旧版逐条审核流程已下线，请使用总审核面板（按批次）操作。' });
 }
 
 async function handleReopenReview(rowNumber, status = REVIEW_STATUS.UPDATED, noteOverride = null) {
-  const entry = getReviewEntry(rowNumber);
-  if (!entry) {
-    appendLog({ status: 'error', message: '未找到该审核记录' });
-    return;
-  }
-  const reviewer = getSubmitterName();
-  if (!reviewer) {
-    appendLog({ status: 'error', message: '请先填写提交人姓名作为审核人' });
-    elements.metadata.submitter?.focus();
-    return;
-  }
-  const noteInput = document.querySelector(`.review-note-input[data-row="${rowNumber}"]`);
-  const note =
-    noteOverride != null ? noteOverride : noteInput ? noteInput.value.trim() : entry.note || '';
-  const previous = {
-    status: entry.status,
-    normalizedStatus: entry.normalizedStatus,
-    note: entry.note,
-    reviewer: entry.reviewer
-  };
-  const statusSnapshot = updateReviewCardStatusUI(rowNumber, status);
-  entry.status = status;
-  entry.normalizedStatus = normalizeReviewStatus(status);
-  entry.note = note;
-  entry.reviewer = reviewer;
-  renderReviewEntries();
-  renderSubmitterSuggestions();
-  try {
-    await window.bridge.reopenReviewEntry({ ...entry, note, reviewer, status });
-    appendLog({
-      status: 'success',
-      message: `${entry.mainCategory || ''}/${entry.subCategory || ''} 状态更新为 ${status}`
-    });
-    clearReviewNoteDraft(rowNumber);
-    markActionConfirmed(rowNumber, 'apply-review-status');
-    state.reviewAcknowledged.submitter?.delete?.(getEntryKey(entry));
-    state.reviewAcknowledged.reviewer?.delete?.(getReviewerKey(entry));
-    persistAcknowledgementRecords();
-  } catch (error) {
-    restoreReviewCardStatusUI(rowNumber, statusSnapshot);
-    entry.status = previous.status;
-    entry.normalizedStatus = previous.normalizedStatus;
-    entry.note = previous.note;
-    entry.reviewer = previous.reviewer;
-    renderReviewEntries();
-    renderSubmitterSuggestions();
-    appendLog({ status: 'error', message: `重新提交失败：${error.message}` });
-  }
-}
-
-/**
- * 同步 Sheet 中标记为"已通过"的审核记录到入库
- * 
- * 此函数在普通审核模式和按文件审核模式下都会工作：
- * - 普通模式：同步传统的审核记录
- * - 按文件模式：loadReviewEntries 会自动根据 useFileReviewMode 调用对应的加载函数
- * 
- * 调用 syncReviewEntries 后端 API，然后刷新审核数据。
- */
-async function handleSyncReview() {
-  if (!window.bridge?.syncReviewEntries) {
-    return;
-  }
-  try {
-    const result = await window.bridge.syncReviewEntries();
-    const processed = result?.processed || 0;
-    appendLog({
-      status: 'success',
-      message: `已同步 Sheet 审批，成功入库 ${processed} 条`,
-      broadcastGlobal: true
-    });
-    await loadReviewEntries();
-  } catch (error) {
-    appendLog({ status: 'error', message: `同步失败：${error.message}` });
-  }
+  void rowNumber;
+  void status;
+  void noteOverride;
+  appendLog({ status: 'warning', message: '旧版逐条审核流程已下线，请使用总审核面板（按批次）操作。' });
 }
 
 // 上一次更新的进度记录，用于节流
 const lastProgressUpdate = new Map();
+
+// 防抖渲染：合并多次快速 renderSlots 调用为一次
+let _pendingRenderSlots = false;
+function scheduleRenderSlots() {
+  if (_pendingRenderSlots) return;
+  _pendingRenderSlots = true;
+  requestAnimationFrame(() => {
+    _pendingRenderSlots = false;
+    renderSlots();
+  });
+}
 
 function handleUploadProgress(entry) {
   if (!entry) return;
@@ -21225,33 +21461,53 @@ function handleUploadProgress(entry) {
     const status = entry.status === 'running' ? 'running' : entry.status;
     const progress = entry.progress || 0;
 
-    // 对于进度更新，使用节流以避免频繁重渲染
+    // 对于进度更新（上传中且非完成），只做 DOM 级别的直接更新，不重渲染整个列表
     if (entry.phase === 'uploading' && progress > 0 && progress < 100) {
-      const lastProgress = lastProgressUpdate.get(entry.fileId) || 0;
-      // 只有进度变化超过 5% 才更新 UI
-      if (progress - lastProgress < 5) {
-        // 直接更新进度条 DOM，不重渲染整个列表
-        updateProgressRingDirectly(entry.slotId, entry.fileId, progress);
-        return;
+      // 更新状态数据（不触发渲染）
+      setFileStatus(entry.slotId, entry.fileId, status, entry.message, progress, false);
+      // 直接更新进度条 DOM
+      updateProgressRingDirectly(entry.slotId, entry.fileId, progress);
+      // 更新状态点
+      updateStatusDotDirectly(entry.fileId, status, entry.message);
+      // 链接只需存储，不需要立即渲染
+      if (entry.folderLink && !entry.isReference) {
+        setSlotLink(entry.slotId, entry.folderLink, false);
       }
-      lastProgressUpdate.set(entry.fileId, progress);
-    } else {
-      // 非进度更新或完成，清除记录
-      lastProgressUpdate.delete(entry.fileId);
+      if (entry.referenceLink) {
+        setSlotReferenceLink(entry.slotId, entry.referenceLink, false);
+      }
+      return;
     }
 
-    setFileStatus(entry.slotId, entry.fileId, status, entry.message, progress);
+    // 非进度更新或完成，清除记录
+    lastProgressUpdate.delete(entry.fileId);
+
+    // 批量更新状态数据，最后只做一次渲染
+    setFileStatus(entry.slotId, entry.fileId, status, entry.message, progress, false);
     if (entry.folderLink && !entry.isReference) {
-      setSlotLink(entry.slotId, entry.folderLink);
+      setSlotLink(entry.slotId, entry.folderLink, false);
     }
     if (entry.referenceLink) {
-      setSlotReferenceLink(entry.slotId, entry.referenceLink);
+      setSlotReferenceLink(entry.slotId, entry.referenceLink, false);
     }
+    // 使用 rAF 合并渲染，避免同一帧多次重建 DOM
+    scheduleRenderSlots();
   }
   // 只在非频繁进度更新时写日志
   if (entry.phase !== 'uploading' || entry.progress === 100 || !entry.progress) {
     appendUploadLog(entry);
   }
+}
+
+// 直接更新状态点 DOM，避免重渲染
+function updateStatusDotDirectly(fileId, statusClass, message) {
+  const fileItem = document.querySelector(`.slot-grid-file-item[data-file-id="${fileId}"]`);
+  if (!fileItem) return;
+  const dot = fileItem.querySelector('.slot-grid-status-dot');
+  if (!dot) return;
+  // 移除旧状态类，添加新状态类
+  dot.className = `slot-grid-status-dot ${statusClass}`;
+  dot.title = message || '';
 }
 
 // 直接更新进度条 DOM，避免重渲染
@@ -21759,6 +22015,12 @@ elements.importConfig.addEventListener('click', async () => {
       if (prefs.reviewRangeMode) {
         setReviewRangeMode(prefs.reviewRangeMode);
       }
+      if (prefs.reviewRangeMonth) {
+        setReviewRangeMonth(prefs.reviewRangeMonth, { skipRender: true });
+      }
+      if (prefs.reviewGlobalViewSize) {
+        setReviewGlobalViewSize(prefs.reviewGlobalViewSize, { skipRender: true });
+      }
       if (prefs.myReviewSortMode) {
         setMyReviewSortMode(prefs.myReviewSortMode);
       }
@@ -21792,6 +22054,8 @@ elements.exportConfig.addEventListener('click', async () => {
         renameLocal: state.renameLocalEnabled,
         reviewSortMode: state.reviewSort?.mode || 'priority',
         reviewRangeMode: state.reviewRangeMode || '10d',
+        reviewRangeMonth: normalizeReviewRangeMonth(state.reviewRangeMonth),
+        reviewGlobalViewSize: normalizeReviewGlobalViewSize(state.reviewGlobalViewSize),
         myReviewSortMode: state.myReviewSort?.mode || 'priority',
         myReviewRange: state.myReviewFilters?.range || '10d'
       }
@@ -21863,15 +22127,35 @@ elements.reviewSortMode?.addEventListener('change', (event) => {
 elements.reviewRangeMode?.addEventListener('change', (event) => {
   setReviewRangeMode(event.target.value);
 });
+elements.reviewMonthPicker?.addEventListener('change', (event) => {
+  setReviewRangeMonth(event.target.value);
+});
+elements.reviewCollapseAll?.addEventListener('click', () => {
+  setReviewCollapseAllMode(!state.reviewCollapseAll);
+});
+elements.reviewHoverPreviewToggle?.addEventListener('click', () => {
+  setReviewHoverPreviewEnabled(!state.reviewHoverPreviewEnabled);
+});
+elements.reviewToolbarToggle?.addEventListener('click', () => {
+  setReviewToolbarCollapsed(!state.reviewToolbarCollapsed);
+});
+elements.reviewGlobalViewSize?.addEventListener('change', (event) => {
+  setReviewGlobalViewSize(event.target.value);
+});
+elements.reviewBatchSearch?.addEventListener('input', (event) => {
+  state.reviewBatchSearch = (event.target.value || '').trim();
+  state.reviewPage = 1;
+  renderFileReviewEntries();
+});
 elements.reviewPagination?.addEventListener('click', (event) => {
   const action = event.target.dataset.action;
   if (!action) return;
   if (action === 'review-page-prev') {
     state.reviewPage = Math.max(1, (state.reviewPage || 1) - 1);
-    renderReviewEntries();
+    renderFileReviewEntries();
   } else if (action === 'review-page-next') {
     state.reviewPage = (state.reviewPage || 1) + 1;
-    renderReviewEntries();
+    renderFileReviewEntries();
   }
 });
 elements.notificationMode?.addEventListener('change', (event) => {
@@ -21937,7 +22221,7 @@ initViewTabs();
 initUserRolePreference();
 initMyReviewFilters();
 switchSlotView(state.slotViewMode || 'normal');
-renderReviewEntries();
+renderFileReviewEntries();
 elements.refreshReview?.addEventListener('click', async () => {
   appendLog({ status: 'info', message: '正在刷新并同步数据...' });
 
@@ -21955,7 +22239,14 @@ elements.refreshReview?.addEventListener('click', async () => {
     appendLog({ status: 'error', message: '刷新失败: ' + err.message });
   }
 });
-elements.syncReview?.addEventListener('click', handleSyncReview);
+elements.syncReview?.addEventListener('click', async () => {
+  appendLog({ status: 'info', message: '正在同步并刷新审核数据...' });
+  try {
+    await loadFileReviewEntries({ logSuccess: true, forceRefresh: true, skipConflictCheck: false });
+  } catch (error) {
+    appendLog({ status: 'error', message: `同步失败：${error.message}` });
+  }
+});
 elements.reviewList?.addEventListener('click', (event) => {
   const action = event.target.dataset.action;
   if (!action) return;
@@ -22286,15 +22577,180 @@ function persistReviewRangeMode(mode) {
   }
 }
 
+function persistReviewRangeMonth(monthValue) {
+  try {
+    localStorage.setItem(REVIEW_MONTH_STORAGE_KEY, normalizeReviewRangeMonth(monthValue));
+  } catch (error) {
+    console.error('Failed to save review month preference', error);
+  }
+}
+
+function normalizeReviewGlobalViewSize(value) {
+  return ['per-batch', 'large', 'medium', 'small'].includes(value) ? value : 'per-batch';
+}
+
+function updateReviewGlobalViewSizeControl() {
+  if (elements.reviewGlobalViewSize) {
+    elements.reviewGlobalViewSize.value = normalizeReviewGlobalViewSize(state.reviewGlobalViewSize);
+  }
+}
+
+function persistReviewGlobalViewSizePreference(value) {
+  try {
+    localStorage.setItem(REVIEW_GLOBAL_VIEW_SIZE_STORAGE_KEY, normalizeReviewGlobalViewSize(value));
+  } catch (error) {
+    console.error('Failed to save review global view-size preference', error);
+  }
+}
+
+function restoreReviewGlobalViewSizePreference() {
+  try {
+    const stored = localStorage.getItem(REVIEW_GLOBAL_VIEW_SIZE_STORAGE_KEY);
+    if (stored) {
+      state.reviewGlobalViewSize = normalizeReviewGlobalViewSize(stored);
+    }
+  } catch (error) {
+    console.error('Failed to restore review global view-size preference', error);
+  }
+  updateReviewGlobalViewSizeControl();
+}
+
+function setReviewGlobalViewSize(value, options = {}) {
+  const { skipPersist = false, skipRender = false } = options;
+  state.reviewGlobalViewSize = normalizeReviewGlobalViewSize(value);
+  updateReviewGlobalViewSizeControl();
+  if (!skipPersist) {
+    persistReviewGlobalViewSizePreference(state.reviewGlobalViewSize);
+  }
+  if (!skipRender) {
+    renderFileReviewEntries();
+  }
+}
+
+function getAutoBatchViewSize(fileCount = 0) {
+  let autoViewSize = 'large';
+  if (fileCount > 12) autoViewSize = 'medium';
+  if (fileCount > 24) autoViewSize = 'small';
+  return autoViewSize;
+}
+
+function getBatchViewSizePreference(batchId = '') {
+  try {
+    const viewPrefs = JSON.parse(localStorage.getItem('batchViewSizePrefs') || '{}');
+    const value = batchId ? viewPrefs[batchId] : '';
+    return ['large', 'medium', 'small'].includes(value) ? value : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function getEffectiveBatchViewSize(batch) {
+  const fileCount = Number(batch?.files?.length || 0);
+  const autoViewSize = getAutoBatchViewSize(fileCount);
+  const globalMode = normalizeReviewGlobalViewSize(state.reviewGlobalViewSize);
+  if (globalMode !== 'per-batch') {
+    return globalMode;
+  }
+  return getBatchViewSizePreference(batch?.batchId) || autoViewSize;
+}
+
+function updateReviewHoverPreviewToggle() {
+  const btn = elements.reviewHoverPreviewToggle;
+  if (!btn) return;
+  const enabled = Boolean(state.reviewHoverPreviewEnabled);
+  btn.textContent = `悬浮预览：${enabled ? '开' : '关'}`;
+  btn.classList.toggle('active', enabled);
+  btn.title = enabled ? '已开启悬浮预览（鼠标悬停弹出）' : '已关闭悬浮预览（仅支持点击预览）';
+}
+
+function persistReviewHoverPreviewPreference(enabled) {
+  try {
+    localStorage.setItem(REVIEW_HOVER_PREVIEW_STORAGE_KEY, enabled ? '1' : '0');
+  } catch (error) {
+    console.error('Failed to save review hover preview preference', error);
+  }
+}
+
+function setReviewHoverPreviewEnabled(enabled, options = {}) {
+  const { skipPersist = false } = options;
+  state.reviewHoverPreviewEnabled = Boolean(enabled);
+  if (!state.reviewHoverPreviewEnabled) {
+    hideHoverPreview(true);
+  }
+  updateReviewHoverPreviewToggle();
+  if (!skipPersist) {
+    persistReviewHoverPreviewPreference(state.reviewHoverPreviewEnabled);
+  }
+}
+
+function restoreReviewHoverPreviewPreference() {
+  try {
+    const stored = localStorage.getItem(REVIEW_HOVER_PREVIEW_STORAGE_KEY);
+    if (stored === '0') {
+      state.reviewHoverPreviewEnabled = false;
+    } else if (stored === '1') {
+      state.reviewHoverPreviewEnabled = true;
+    }
+  } catch (error) {
+    console.error('Failed to restore review hover preview preference', error);
+  }
+  updateReviewHoverPreviewToggle();
+}
+
+function updateReviewToolbarCollapsedUI() {
+  const panel = document.getElementById('review-panel');
+  if (panel) {
+    panel.classList.toggle('review-toolbar-collapsed', Boolean(state.reviewToolbarCollapsed));
+  }
+  const btn = elements.reviewToolbarToggle;
+  if (btn) {
+    const collapsed = Boolean(state.reviewToolbarCollapsed);
+    btn.textContent = collapsed ? '展开工具栏' : '收起工具栏';
+    btn.title = collapsed ? '展开审核工具栏' : '收起审核工具栏';
+    btn.classList.toggle('active', collapsed);
+  }
+}
+
+function persistReviewToolbarCollapsedPreference(collapsed) {
+  try {
+    localStorage.setItem(REVIEW_TOOLBAR_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch (error) {
+    console.error('Failed to save review toolbar collapsed preference', error);
+  }
+}
+
+function setReviewToolbarCollapsed(collapsed, options = {}) {
+  const { skipPersist = false } = options;
+  state.reviewToolbarCollapsed = Boolean(collapsed);
+  updateReviewToolbarCollapsedUI();
+  if (!skipPersist) {
+    persistReviewToolbarCollapsedPreference(state.reviewToolbarCollapsed);
+  }
+}
+
+function restoreReviewToolbarCollapsedPreference() {
+  try {
+    const val = localStorage.getItem(REVIEW_TOOLBAR_COLLAPSED_STORAGE_KEY);
+    state.reviewToolbarCollapsed = val === null ? true : (val === '1');
+  } catch (error) {
+    console.error('Failed to restore review toolbar collapsed preference', error);
+    state.reviewToolbarCollapsed = true;
+  }
+  updateReviewToolbarCollapsedUI();
+}
+
 function restoreReviewRangeMode() {
   try {
     const stored = localStorage.getItem(REVIEW_RANGE_STORAGE_KEY);
     if (stored) {
       state.reviewRangeMode = normalizeReviewRangeMode(stored);
     }
+    const storedMonth = localStorage.getItem(REVIEW_MONTH_STORAGE_KEY);
+    state.reviewRangeMonth = normalizeReviewRangeMonth(storedMonth);
   } catch (error) {
     console.error('Failed to restore review range preference', error);
   }
+  ensureReviewRangeMonthInitialized();
   updateReviewRangeControls();
 }
 
@@ -22302,14 +22758,21 @@ function updateReviewRangeControls() {
   if (elements.reviewRangeMode) {
     elements.reviewRangeMode.value = normalizeReviewRangeMode(state.reviewRangeMode);
   }
+  if (elements.reviewMonthPicker) {
+    elements.reviewMonthPicker.value = normalizeReviewRangeMonth(state.reviewRangeMonth);
+  }
+  if (elements.reviewMonthPickerWrap) {
+    elements.reviewMonthPickerWrap.hidden = normalizeReviewRangeMode(state.reviewRangeMode) !== 'month';
+  }
 }
 
 function setReviewRangeMode(mode) {
   state.reviewRangeMode = normalizeReviewRangeMode(mode);
   state.reviewPage = 1;
+  ensureReviewRangeMonthInitialized();
   updateReviewRangeControls();
   persistReviewRangeMode(state.reviewRangeMode);
-  renderReviewEntries();
+  renderFileReviewEntries();
 }
 
 // ============================================
@@ -27048,6 +27511,8 @@ function initMultiBatchToolbar() {
   const approveBtn = document.getElementById('multi-batch-approve');
   const rejectBtn = document.getElementById('multi-batch-reject');
   const storeBtn = document.getElementById('multi-batch-store');
+  const statusSelect = document.getElementById('multi-batch-status-select');
+  const applyStatusBtn = document.getElementById('multi-batch-apply-status');
   const cancelBtn = document.getElementById('multi-batch-cancel');
 
   if (!toolbar) return;
@@ -27105,6 +27570,26 @@ function initMultiBatchToolbar() {
     await executeMultiBatchAction('store');
   });
 
+  // 批量设置批次状态
+  statusSelect?.addEventListener('change', () => {
+    updateMultiBatchToolbar();
+  });
+
+  applyStatusBtn?.addEventListener('click', async () => {
+    if (multiBatchSelection.selectedBatchIds.size === 0) return;
+
+    const targetStatus = (statusSelect?.value || '').trim();
+    if (!targetStatus) {
+      appendLog({ status: 'warning', message: '请先选择要设置的批次状态' });
+      return;
+    }
+
+    const confirmed = confirm(`确定要将选中的 ${multiBatchSelection.selectedBatchIds.size} 个批次状态统一设置为【${targetStatus}】吗？`);
+    if (!confirmed) return;
+
+    await executeMultiBatchSetStatus(targetStatus);
+  });
+
   // 取消选择
   cancelBtn?.addEventListener('click', () => {
     clearMultiBatchSelection();
@@ -27144,6 +27629,8 @@ function updateMultiBatchToolbar() {
   const approveBtn = document.getElementById('multi-batch-approve');
   const rejectBtn = document.getElementById('multi-batch-reject');
   const storeBtn = document.getElementById('multi-batch-store');
+  const statusSelect = document.getElementById('multi-batch-status-select');
+  const applyStatusBtn = document.getElementById('multi-batch-apply-status');
 
   const count = multiBatchSelection.selectedBatchIds.size;
 
@@ -27157,6 +27644,10 @@ function updateMultiBatchToolbar() {
   if (approveBtn) approveBtn.disabled = !hasSelection;
   if (rejectBtn) rejectBtn.disabled = !hasSelection;
   if (storeBtn) storeBtn.disabled = !hasSelection;
+  if (applyStatusBtn) {
+    const hasTargetStatus = Boolean((statusSelect?.value || '').trim());
+    applyStatusBtn.disabled = !hasSelection || !hasTargetStatus;
+  }
 
   // 更新全选框状态
   if (selectAllCheckbox && elements.reviewList) {
@@ -27271,10 +27762,89 @@ async function executeMultiBatchAction(action) {
 }
 
 /**
+ * 批量设置批次状态（仅修改批次状态，不执行文件合格/入库动作）
+ */
+async function executeMultiBatchSetStatus(targetStatus) {
+  const batchIds = Array.from(multiBatchSelection.selectedBatchIds);
+  if (batchIds.length === 0) return;
+
+  const progressOverlay = showMultiBatchProgressOverlay('set-status', batchIds.length, targetStatus);
+
+  let successCount = 0;
+  let errorCount = 0;
+  const errors = [];
+
+  try {
+    for (let i = 0; i < batchIds.length; i++) {
+      const batchId = batchIds[i];
+      updateMultiBatchProgress(progressOverlay, i + 1, batchIds.length, batchId);
+
+      try {
+        const result = await updateBatchStatus(batchId, targetStatus);
+        if (!result?.success) {
+          throw new Error(result?.message || '后端返回失败');
+        }
+
+        const now = Date.now();
+        const batch = state.fileReviewBatches?.find(b => b.batchId === batchId);
+        if (batch) {
+          batch.batchStatus = targetStatus;
+          batch.files?.forEach(f => {
+            f.batchStatus = targetStatus;
+            f._localModifiedAt = now;
+          });
+        }
+        state.fileReviewFiles?.forEach(f => {
+          if (f.batchId === batchId) {
+            f.batchStatus = targetStatus;
+            f._localModifiedAt = now;
+          }
+        });
+        successCount++;
+      } catch (error) {
+        console.error(`[MultiBatch] 批次 ${batchId} set-status 失败:`, error);
+        errors.push(`批次 ${batchId}: ${error.message}`);
+        errorCount++;
+      }
+
+      if (i < batchIds.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+  } finally {
+    progressOverlay?.remove();
+  }
+
+  clearMultiBatchSelection();
+  await loadFileReviewEntries({ silent: true });
+
+  if (errorCount === 0) {
+    appendLog({ status: 'success', message: `批量设置状态完成：成功处理 ${successCount} 个批次（状态：${targetStatus}）` });
+  } else {
+    appendLog({
+      status: 'warning',
+      message: `批量设置状态完成：成功 ${successCount} 个，失败 ${errorCount} 个（目标状态：${targetStatus}）`
+    });
+    if (errors.length > 0) {
+      console.warn('[MultiBatch] 错误详情:', errors);
+    }
+  }
+}
+
+/**
  * 显示多批次操作进度弹窗
  */
-function showMultiBatchProgressOverlay(action, totalCount) {
-  const actionName = action === 'approve' ? '批量标记合格' : (action === 'reject' ? '批量标记不合格' : '批量入库');
+function showMultiBatchProgressOverlay(action, totalCount, targetStatus = '') {
+  let actionName = '批量处理';
+  if (action === 'approve') {
+    actionName = '批量标记合格';
+  } else if (action === 'reject') {
+    actionName = '批量标记不合格';
+  } else if (action === 'store') {
+    actionName = '批量入库';
+  } else if (action === 'set-status') {
+    actionName = `批量设置状态（${targetStatus || '未指定'}）`;
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'multi-batch-progress-overlay';

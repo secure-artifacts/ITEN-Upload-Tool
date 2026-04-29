@@ -275,14 +275,21 @@
     function renderPunchTab(record) {
       const effectiveMode = C.getEffectiveMode();
       const isTemp = state.todayMode && state.todayModeDate === C.formatDate(new Date());
+      const modeIcon = {
+        calendar: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>',
+        fullTime: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+        working: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg>',
+        student: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/><path d="M22 10v6"/></svg>',
+        custom: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-13h-7z"/></svg>'
+      };
       return `
         <div class="ck-today-mode-bar ${isTemp ? 'temp-mode' : ''}">
-          <span class="ck-today-mode-label">📅 今日时间模式${isTemp ? '（临时）' : ''}：</span>
+          <span class="ck-today-mode-label">${modeIcon.calendar} 今日时间模式${isTemp ? '（临时）' : ''}：</span>
           <div class="ck-today-mode-options">
-            <button class="ck-today-mode-btn ${effectiveMode === 'full_time' ? 'active' : ''}" data-mode="full_time">👤 全天人员</button>
-            <button class="ck-today-mode-btn ${effectiveMode === 'working' ? 'active' : ''}" data-mode="working">💼 上班人员</button>
-            <button class="ck-today-mode-btn ${effectiveMode === 'student' ? 'active' : ''}" data-mode="student">🎓 上学人员</button>
-            <button class="ck-today-mode-btn ${effectiveMode === 'other' ? 'active' : ''}" data-mode="other">⚡ ${state.profile.customModeLabel || '自定义'}</button>
+            <button class="ck-today-mode-btn ${effectiveMode === 'full_time' ? 'active' : ''}" data-mode="full_time">${modeIcon.fullTime} 全天人员</button>
+            <button class="ck-today-mode-btn ${effectiveMode === 'working' ? 'active' : ''}" data-mode="working">${modeIcon.working} 上班人员</button>
+            <button class="ck-today-mode-btn ${effectiveMode === 'student' ? 'active' : ''}" data-mode="student">${modeIcon.student} 上学人员</button>
+            <button class="ck-today-mode-btn ${effectiveMode === 'other' ? 'active' : ''}" data-mode="other">${modeIcon.custom} ${state.profile.customModeLabel || '自定义'}</button>
           </div>
         </div>
         <div class="ck-slots-row">${R1.renderSlotCards(record)}</div>
@@ -307,7 +314,7 @@
       <div class="ck-app ${state.isDark ? 'dark' : 'light'}">
         ${R1.renderHeader(record)}
         
-        <main class="ck-main ${state.activeTab === 'team' || state.activeTab === 'report' || state.activeTab === 'stats' ? 'full-width' : ''}">
+        <main class="ck-main ${state.activeTab === 'team' || state.activeTab === 'report' || state.activeTab === 'stats' ? 'full-width' : ''} ${state.activeTab === 'stats' ? 'stats-view' : ''}">
           <div class="ck-content">
             ${state.activeTab === 'punch' ? renderPunchTab(record) : state.activeTab === 'history' ? R2.renderHistory()
         : state.activeTab === 'report' ? (window.CheckinReport?.getFullPageHtml?.() || window.CheckinReport?.getRecordsPanelHtml?.() || '')
@@ -370,6 +377,12 @@
     document.getElementById('ck-next-day')?.addEventListener('click', () => A.changeViewDate(1));
     document.getElementById('ck-prev-month')?.addEventListener('click', () => { state.viewDate.setMonth(state.viewDate.getMonth() - 1); render(); });
     document.getElementById('ck-next-month')?.addEventListener('click', () => { state.viewDate.setMonth(state.viewDate.getMonth() + 1); render(); });
+
+    // 🔴 历史月视图成员筛选
+    document.getElementById('ck-history-member-select')?.addEventListener('change', (e) => {
+      state.historyMemberFilter = e.target.value || null;
+      render();
+    });
 
     // 日期选择器
     const dateInput = document.getElementById('ck-date-input');

@@ -7,6 +7,17 @@
   const A = window.CheckinActions;
   const { state, formatTime, formatDateDisplay, isToday, isPastDate, getActiveRecord, calculateDuration, calculateTargetHours, getStats, getDynamicSlotConfig, AttendanceStatus } = C;
 
+  const icon = {
+    punch: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M16.3 7.7l2.1-2.1"/><path d="M7 17a5 5 0 0 1 10 0"/><path d="M4 21h16"/></svg>',
+    team: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    stats: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><rect x="7" y="11" width="3" height="5" rx="1"/><rect x="12" y="7" width="3" height="9" rx="1"/><rect x="17" y="3" width="3" height="13" rx="1"/></svg>',
+    report: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h4l4 4V6l-4 4H4z"/><path d="M16 9.5a4 4 0 0 1 0 5"/><path d="M19 7a8 8 0 0 1 0 10"/></svg>',
+    history: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>',
+    sun: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/></svg>',
+    moon: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"/></svg>',
+    settings: '<svg class="ck-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.03.03a2 2 0 1 1-2.83 2.83l-.03-.03A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.05A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.03.03a2 2 0 1 1-2.83-2.83l.03-.03A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.05A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.03-.03a2 2 0 1 1 2.83-2.83l.03.03A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.05A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.03-.03a2 2 0 1 1 2.83 2.83l-.03.03A1.7 1.7 0 0 0 19.4 9c.23.6.8 1 1.55 1H21a2 2 0 1 1 0 4h-.05A1.7 1.7 0 0 0 19.4 15z"/></svg>'
+  };
+
   function renderHeader(record) {
     const dateDisplay = formatDateDisplay(state.viewDate);
     return `
@@ -17,11 +28,11 @@
         </div>
         <div class="ck-header-center">
           <div class="ck-tabs">
-            <button class="ck-tab ${state.activeTab === 'punch' ? 'active' : ''}" data-tab="punch">🌅 实时打卡</button>
-            <button class="ck-tab ${state.activeTab === 'team' ? 'active' : ''}" data-tab="team">👥 组内打卡汇总</button>
-            <button class="ck-tab ${state.activeTab === 'stats' ? 'active' : ''}" data-tab="stats">📊 任务统计</button>
-            <button class="ck-tab ${state.activeTab === 'report' ? 'active' : ''}" data-tab="report">📢 报数记录</button>
-            <button class="ck-tab ${state.activeTab === 'history' ? 'active' : ''}" data-tab="history">📅 按月查看</button>
+            <button class="ck-tab ${state.activeTab === 'punch' ? 'active' : ''}" data-tab="punch">${icon.punch} 实时打卡</button>
+            <button class="ck-tab ${state.activeTab === 'team' ? 'active' : ''}" data-tab="team">${icon.team} 组内打卡汇总</button>
+            <button class="ck-tab ${state.activeTab === 'stats' ? 'active' : ''}" data-tab="stats">${icon.stats} 任务统计</button>
+            <button class="ck-tab ${state.activeTab === 'report' ? 'active' : ''}" data-tab="report">${icon.report} 报数记录</button>
+            <button class="ck-tab ${state.activeTab === 'history' ? 'active' : ''}" data-tab="history">${icon.history} 按月查看</button>
           </div>
           <div class="ck-date-nav">
             <button id="ck-prev-day" class="ck-btn-icon">◀</button>
@@ -35,8 +46,8 @@
           </div>
         </div>
         <div class="ck-header-right">
-          <button class="ck-btn-icon" id="ck-theme-toggle" title="${state.isDark ? '切换亮色' : '切换暗色'}">${state.isDark ? '☀️' : '🌙'}</button>
-          <button class="ck-btn-icon" id="ck-settings-btn" title="设置">⚙️</button>
+          <button class="ck-btn-icon" id="ck-theme-toggle" title="${state.isDark ? '切换亮色' : '切换暗色'}">${state.isDark ? icon.sun : icon.moon}</button>
+          <button class="ck-btn-icon" id="ck-settings-btn" title="设置">${icon.settings}</button>
         </div>
       </header>
       `;

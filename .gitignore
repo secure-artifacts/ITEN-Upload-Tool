@@ -20,6 +20,10 @@ pnpm-debug.log*
 config-export*.json
 *.local
 *.env
+.env
+.env.*
+__pycache__/
+iten-team-config.json
 
 # Editor / OS noise
 .DS_Store

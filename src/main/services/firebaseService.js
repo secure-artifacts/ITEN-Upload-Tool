@@ -803,12 +803,18 @@ class FirebaseService {
         }
 
         // 如果没有任何打卡时间，检查是否有特殊状态（休假、身体抱恙等）
+        // 或者有报数数据（taskCount）
         for (const key of slotKeys) {
             const slot = record.slots[key];
             if (slot && typeof slot === 'object') {
                 const status = slot.status;
                 // 这些状态表示用户主动选择的，即使没有时间也算有效
                 if (status && status !== 'normal' && status !== 'absent') {
+                    return true;
+                }
+                // 🔴 修复：有报数数据（taskCount）也算有效记录
+                // 用户可能先报数再打卡，此时记录只有 taskCount 没有 time
+                if (slot.taskCount) {
                     return true;
                 }
             }

@@ -1061,65 +1061,9 @@ class GoogleService {
         notify(payload);
       }
     }
-    for (const task of reviewTasks.values()) {
-      // 从云端获取文件列表，用于保存到审核记录中
-      let fileLists = {
-        acceptedFiles: [],
-        rejectedFiles: [],
-        acceptedDetails: [],
-        rejectedDetails: [],
-        finishedFolderId: task.finishedFolderId || ''
-      };
-
-      if (task.tempFolderId) {
-        try {
-          fileLists = await this.deriveReviewFileLists(task.tempFolderId, {
-            finishedFolderId: task.finishedFolderId,
-            treatRootAsFinished: false
-          });
-          // 确保有 finishedFolderId
-          if (!fileLists.finishedFolderId && task.finishedFolderId) {
-            fileLists.finishedFolderId = task.finishedFolderId;
-          }
-        } catch (error) {
-          console.warn('Failed to derive file lists for review task:', error.message);
-        }
-      }
-
-      await this.appendSheetRow({
-        file: {},
-        metadata: {
-          submitter: task.submitter,
-          completedAt: task.completedAt,
-          subFolderLink: task.tempFolderLink,
-          mainCategory: task.mainCategory,
-          subCategory: task.subCategory,
-          readyFlag: '',
-          admin: task.admin,
-          reviewer: '',
-          reviewEnabled: true,
-          reviewTempFolderId: task.tempParentId,
-          reviewTargetFolderId: task.targetFolderId,
-          driveFileId: task.tempFolderId,
-          note: task.note,
-          customDate: task.customDate,
-          reviewDescription: task.description || '',
-          reviewReferenceFolderId: task.referenceFolderId || '',
-          reviewReferenceFolderLink: task.referenceFolderLink || '',
-          reviewNamingMetadata: task.namingMetadata || '',
-          reviewRenamePattern: task.renamePattern || '',
-          reviewFolderPattern: task.folderPattern || '',
-          // 添加文件列表信息
-          acceptedFiles: fileLists.acceptedFiles || [],
-          rejectedFiles: fileLists.rejectedFiles || [],
-          acceptedDetails: fileLists.acceptedDetails || [],
-          rejectedDetails: fileLists.rejectedDetails || [],
-          finishedFolderId: fileLists.finishedFolderId || ''
-        },
-        link: task.tempFolderLink,
-        renamed: ''
-      });
-    }
+    // 注意：旧版"审核记录"批次汇总已移除（appendSheetRow reviewEnabled 流程）
+    // 所有审核数据现在通过 appendFileReviewRow 按文件逐条写入"文件审核"分页
+    // 旧版写入的数据无前端消费者，移除后不影响任何功能
 
     // 清理临时批次ID，为下次上传做准备
     this._currentBatchId = null;
@@ -2155,23 +2099,23 @@ class GoogleService {
     if (rowNumber && this.firebaseService?.isReady?.()) {
       try {
         await this.firebaseService.updateFileStatus(this.config.sheetId, rowNumber, {
-          batchId: params.batchId || '',
-          fileName: params.fileName || '',
-          fileId: params.fileId || '',
-          fileLink: params.fileLink || '',
-          submitter: params.submitter || '',
-          submitTime: timestamp,
+          batchId: metadata.batchId || '',
+          fileName: renamed || file?.name || '',
+          fileId: metadata.driveFileId || '',
+          fileLink: metadata.fileLink || link || '',
+          submitter: metadata.submitter || metadata.owner || '',
+          submitTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
           status: FILE_REVIEW_STATUS.PENDING,
-          taskType: params.taskType || '',
-          mainCategory: params.mainCategory || '',
-          subCategory: params.subCategory || '',
+          taskType: metadata.taskType || '',
+          mainCategory: metadata.mainCategory || '',
+          subCategory: metadata.subCategory || '',
           reviewer: '',
           reviewTime: '',
           reviewNote: '',
           batchStatus: '待审核'
         });
       } catch (error) {
-        console.warn('[appendFileReviewRow] Firebase 同步失败:', error.message);
+        console.warn('[appendSheetRow] Firebase 同步失败:', error.message);
       }
     }
 
@@ -4255,8 +4199,44 @@ class GoogleService {
       }
       this.reviewHeaderEnsured = true;
     } catch (error) {
-      console.error('Failed to ensure review header', error);
-      this.reviewHeaderEnsured = false;
+      // 如果是分页不存在的错误，尝试自动创建分页
+      if (error.message?.includes('Unable to parse range') ||
+        error.message?.includes('not found') ||
+        error.code === 400) {
+        console.log(`[GoogleService] Creating new review sheet: ${sheetName}`);
+        try {
+          // 创建新的分页
+          await this.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: this.config.sheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: {
+                    title: sheetName
+                  }
+                }
+              }]
+            }
+          });
+
+          // 写入表头
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.config.sheetId,
+            range: headerRange,
+            valueInputOption: 'RAW',
+            requestBody: { values: [REVIEW_HEADERS] }
+          });
+
+          this.reviewHeaderEnsured = true;
+          console.log(`[GoogleService] Review sheet "${sheetName}" created successfully`);
+        } catch (createError) {
+          console.error('Failed to create review sheet:', createError.message);
+          this.reviewHeaderEnsured = false;
+        }
+      } else {
+        console.error('Failed to ensure review header:', error.message);
+        this.reviewHeaderEnsured = false;
+      }
     }
   }
 
@@ -6195,10 +6175,13 @@ class GoogleService {
 
     const dates = this.generateCheckinDateRange(year, month);
     dates.reverse();
-    const dateStrings = dates.map(d => d.toISOString().split('T')[0]);
+    // 🔴 修复时区 bug：使用本地日期格式（与打卡记录的 date 字段一致）
+    // 之前用 toISOString() 会转为 UTC，导致 UTC+N 时区的日期偏移
+    const padDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dateStrings = dates.map(d => padDate(d));
     const slotLabels = ['上午', '下午', '晚上', '休息'];
     const slotKeys = ['morning', 'afternoon', 'evening', 'sleep'];
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = padDate(new Date());
 
     let targetSheetId = null;
     let existingConditionalFormats = [];

@@ -1,30 +1,74 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
-const { exec, execFile } = require('child_process');
-const Store = require('electron-store');
-const { scanFolder } = require('./services/fileScanner');
-const { FileNamer } = require('./services/fileNamer');
-const { GoogleService } = require('./services/googleService');
-const { MediaService } = require('./services/mediaService');
-const { StateStore } = require('./services/stateStore');
-const { UploadController } = require('./services/uploadController');
-
-const AiNamingService = require('./services/aiNamingService');
-const firebaseService = require('./services/firebaseService');
-const { autoUpdater } = require('electron-updater');
-const { ProfileManager } = require('./services/profileManager');
-
-
 const os = require('os');
-const DEFAULT_DOWNLOAD_DIR = path.join(os.homedir() || process.cwd(), 'Downloads', 'ITEN媒体');
 
+// ============================================================
+// 🔴 启动崩溃日志：写入桌面或临时目录，便于 Windows 调试
+// ============================================================
+const CRASH_LOG_PATH = path.join(os.homedir() || process.cwd(), 'Desktop', 'ITEN-crash.log');
+function writeCrashLog(msg) {
+  try {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(CRASH_LOG_PATH, `[${timestamp}] ${msg}\n`);
+  } catch (e) {
+    // 如果桌面写不了，忽略
+  }
+}
+writeCrashLog('=== 应用启动 ===');
+
+// 捕获任何未处理的同步异常
+process.on('uncaughtException', (err) => {
+  writeCrashLog(`[uncaughtException] ${err.stack || err.message}`);
+  try {
+    const { dialog, app } = require('electron');
+    dialog.showErrorBox('应用启动失败', `错误: ${err.message}\n\n日志已保存到桌面 ITEN-crash.log`);
+  } catch (e) { /* ignore */ }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  writeCrashLog(`[unhandledRejection] ${reason?.stack || reason}`);
+});
+
+// ============================================================
+
+function safeRequire(modulePath, label) {
+  try {
+    writeCrashLog(`require: ${label}`);
+    const mod = require(modulePath);
+    writeCrashLog(`  ✓ OK: ${label}`);
+    return mod;
+  } catch (err) {
+    writeCrashLog(`  ✗ FAILED: ${label}\n  ${err.stack || err.message}`);
+    throw err;
+  }
+}
+
+const { app, BrowserWindow, ipcMain, dialog, shell } = safeRequire('electron', 'electron');
+const { exec, execFile } = safeRequire('child_process', 'child_process');
+const Store = safeRequire('electron-store', 'electron-store');
+const { scanFolder } = safeRequire('./services/fileScanner', 'fileScanner');
+const { FileNamer } = safeRequire('./services/fileNamer', 'fileNamer');
+const { GoogleService } = safeRequire('./services/googleService', 'googleService');
+const { MediaService } = safeRequire('./services/mediaService', 'mediaService');
+const { StateStore } = safeRequire('./services/stateStore', 'stateStore');
+const { UploadController } = safeRequire('./services/uploadController', 'uploadController');
+const { DownloadController } = safeRequire('./services/downloadController', 'downloadController');
+const AiNamingService = safeRequire('./services/aiNamingService', 'aiNamingService');
+const firebaseService = safeRequire('./services/firebaseService', 'firebaseService');
+const { autoUpdater } = safeRequire('electron-updater', 'electron-updater');
+const { ProfileManager } = safeRequire('./services/profileManager', 'profileManager');
+
+writeCrashLog('所有模块加载成功');
+
+const DEFAULT_DOWNLOAD_DIR = path.join(os.homedir() || process.cwd(), 'Downloads', 'ITEN媒体');
 const isDev = process.env.NODE_ENV === 'development';
 let isQuitting = false; // 🔴 标记应用是否正在退出
 
 // 🔴 全局抑制 EPIPE 错误（应用关闭时 stdout/stderr 管道断开导致的 console.log 写入失败）
 process.stdout?.on?.('error', (err) => { if (err.code !== 'EPIPE') throw err; });
 process.stderr?.on?.('error', (err) => { if (err.code !== 'EPIPE') throw err; });
+
 
 const DEFAULT_FOLDER_PATTERN = '{{customDate}}-{{submitter}}-{{admin}}';
 const APP_DATA_DIR_NAME = 'wcmg-auto-tool';
@@ -162,8 +206,15 @@ function initializeDefaultProfile() {
       console.log(`[Main] 旧版数据已迁移到 Profile: ${migrated.displayName}`);
       return switchToProfile(migrated.id);
     }
-    // 没有旧数据也没有任何 Profile，返回 null 让前端弹出创建界面
-    return null;
+    // 首次安装：自动创建默认 Profile，避免 store 为空导致启动失败
+    try {
+      const created = profileManager.createProfile('默认用户');
+      console.log(`[Main] 首次启动已创建默认 Profile: ${created.displayName}`);
+      return switchToProfile(created.id);
+    } catch (error) {
+      console.error('[Main] 创建默认 Profile 失败:', error);
+      return null;
+    }
   }
 
   // 有 Profile，尝试加载上次使用的
@@ -195,11 +246,17 @@ function clampZoomFactor(value) {
 }
 
 function getStoredSlots() {
+  if (!store) {
+    return [];
+  }
   const slots = store.get('slots');
   return Array.isArray(slots) ? slots : [];
 }
 
 function saveSlots(slots) {
+  if (!store) {
+    return [];
+  }
   if (Array.isArray(slots)) {
     store.set('slots', slots);
   }
@@ -207,6 +264,9 @@ function saveSlots(slots) {
 }
 
 function getStoredPreferences() {
+  if (!store) {
+    return {};
+  }
   const prefs = store.get('preferences');
   if (prefs && typeof prefs === 'object' && !Array.isArray(prefs)) {
     return prefs;
@@ -215,6 +275,9 @@ function getStoredPreferences() {
 }
 
 function savePreferences(next = {}) {
+  if (!store) {
+    return {};
+  }
   if (!next || typeof next !== 'object') {
     return getStoredPreferences();
   }
@@ -293,6 +356,12 @@ function openInChrome(url) {
 }
 
 function getConfig() {
+  if (!store || !googleService) {
+    const fallback = { ...defaultConfig };
+    fallback.zoomFactor = clampZoomFactor(fallback.zoomFactor ?? defaultConfig.zoomFactor);
+    aiNamingService.setConfig(fallback);
+    return fallback;
+  }
   const stored = store.get('config') || {};
   const merged = { ...defaultConfig, ...stored };
   merged.zoomFactor = clampZoomFactor(merged.zoomFactor ?? defaultConfig.zoomFactor);
@@ -302,6 +371,12 @@ function getConfig() {
 }
 
 function saveConfig(nextConfig) {
+  if (!store || !googleService) {
+    const fallback = { ...defaultConfig, ...(nextConfig || {}) };
+    fallback.zoomFactor = clampZoomFactor(fallback.zoomFactor ?? defaultConfig.zoomFactor);
+    aiNamingService.setConfig(fallback);
+    return fallback;
+  }
   const merged = { ...defaultConfig, ...nextConfig };
   merged.zoomFactor = clampZoomFactor(merged.zoomFactor ?? defaultConfig.zoomFactor);
   store.set('config', merged);
@@ -407,7 +482,7 @@ function createWindow() {
     minHeight: MIN_HEIGHT,
     show: false,
     title: '美工自动入库填表',
-    icon: path.join(app.getAppPath(), 'icon.jpeg'),
+    icon: path.join(app.getAppPath(), 'assets', 'icons', 'icon.jpeg'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -649,6 +724,7 @@ ipcMain.handle('app:set-login-item-settings', async (_event, { openAtLogin, open
 
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false; // Manually trigger download
+  autoUpdater.channel = 'ITEN'; // 内测渠道：安装此版本后自动接收 ITEN 内测更新
   autoUpdater.logger = require('console');
 
   // 对于未签名的 macOS 应用，需要禁用差异下载（差异下载需要签名验证）
@@ -954,6 +1030,11 @@ ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('browser:open', async (_event, url) => {
   return openInChrome(url);
+});
+
+ipcMain.handle('shell:open-path', async (_event, filePath) => {
+  const { shell } = require('electron');
+  return shell.openPath(filePath);
 });
 
 ipcMain.handle('window:set-zoom', async (_event, zoom) => {
@@ -1365,6 +1446,19 @@ ipcMain.handle('google:logout', async () => {
   }
 });
 
+// 获取当前 Access Token（供 Drive Organizer 等模块使用）
+ipcMain.handle('google:get-access-token', async () => {
+  try {
+    if (!googleService.hasTokens()) return { token: null };
+    if (googleService.isTokenExpired()) {
+      await googleService.refreshAccessToken();
+    }
+    return { token: googleService.getAccessToken() };
+  } catch (e) {
+    return { token: null, error: e.message };
+  }
+});
+
 // 获取 Token 状态
 ipcMain.handle('google:token-status', async () => {
   try {
@@ -1520,26 +1614,8 @@ ipcMain.handle('upload:clear-state', () => {
     return { success: false, message: error.message };
   }
 });
-ipcMain.handle('review:fetch', async (_event, options = {}) => {
-  return googleService.fetchReviewEntries(options);
-});
-
-ipcMain.handle('review:approve', async (_event, payload) => {
-  return googleService.approveReviewEntry(payload);
-});
-
-ipcMain.handle('review:reject', async (_event, payload) => {
-  return googleService.rejectReviewEntry(payload);
-});
-
-ipcMain.handle('review:reopen', async (_event, payload) => {
-  return googleService.reopenReviewEntry(payload);
-});
 ipcMain.handle('review:refresh-files', async (_event, payload = {}) => {
   return googleService.refreshReviewFiles(payload);
-});
-ipcMain.handle('review:sync', async () => {
-  return googleService.syncReviewEntries();
 });
 
 // 将文件移动到成品文件夹（标记为合格）
@@ -1780,7 +1856,7 @@ function createGroupMediaWindow() {
     minHeight: 600,
     show: false,
     title: '组内媒体查看',
-    icon: path.join(app.getAppPath(), 'icon.jpeg'),
+    icon: path.join(app.getAppPath(), 'assets', 'icons', 'icon.jpeg'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1839,6 +1915,463 @@ ipcMain.handle('media:download-files', async (_event, payload) => {
   } catch (error) {
     console.error('下载文件失败:', error);
     throw new Error(error.message || '下载失败');
+  }
+});
+
+// ========== 云端文件分拣器 — 批量下载 ==========
+let downloadCtrl = null;
+
+ipcMain.handle('download:start', async (_event, payload) => {
+  try {
+    const { files, destDir } = payload;
+    if (!files?.length || !destDir) {
+      return { success: false, error: '缺少文件列表或目标目录' };
+    }
+    // 确保目录存在
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    // 获取 access token
+    const tokenResult = await googleService.getAccessToken();
+    const accessToken = tokenResult?.token;
+    if (!accessToken) return { success: false, error: '未登录 Google' };
+
+    // 创建新的控制器
+    downloadCtrl = new DownloadController();
+    downloadCtrl.on('progress', (progress) => {
+      // 广播到所有窗口
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('download:progress', progress);
+        }
+      });
+    });
+
+    // 异步启动（不 await，让 IPC 立刻返回）
+    downloadCtrl.start(files, destDir, accessToken).catch(err => {
+      console.error('[Download] 批量下载异常:', err);
+    });
+
+    return { success: true, totalFiles: files.length };
+  } catch (error) {
+    console.error('[Download] 启动失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('download:pause', () => {
+  if (!downloadCtrl) return { state: 'idle' };
+  downloadCtrl.pause();
+  return { state: downloadCtrl.state };
+});
+
+ipcMain.handle('download:resume', () => {
+  if (!downloadCtrl) return { state: 'idle' };
+  downloadCtrl.resume();
+  return { state: downloadCtrl.state };
+});
+
+ipcMain.handle('download:stop', () => {
+  if (!downloadCtrl) return { state: 'idle' };
+  downloadCtrl.stop();
+  return { state: downloadCtrl.state };
+});
+
+ipcMain.handle('download:progress', () => {
+  if (!downloadCtrl) return { state: 'idle', totalFiles: 0, completedFiles: 0 };
+  return downloadCtrl.getProgress();
+});
+
+ipcMain.handle('download:pick-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: '选择下载目录'
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+// ========== 上传分拣器 — 本地文件操作 ==========
+
+ipcMain.handle('local:pick-folder', async (_event, options = {}) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', ...(options.multi ? ['multiSelections'] : [])],
+    title: options.title || '选择本地文件夹'
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return options.multi ? result.filePaths : result.filePaths[0];
+});
+
+let localFolderWatcher = null;
+const trackedFolders = new Map(); // id -> { inode, path, name }
+
+ipcMain.handle('local:watch-folders', async (_event, folders) => {
+  if (localFolderWatcher) {
+    await localFolderWatcher.close();
+    localFolderWatcher = null;
+  }
+  trackedFolders.clear();
+  if (!folders || !folders.length) return;
+
+  const chokidar = require('chokidar');
+  const parentDirs = new Set();
+
+  for (const f of folders) {
+    if (!f.path) continue;
+    try {
+      const stat = fs.statSync(f.path);
+      trackedFolders.set(f.id, { inode: stat.ino, path: f.path, name: f.name });
+      parentDirs.add(path.dirname(f.path));
+    } catch (e) {
+      // Folder might be missing already
+    }
+  }
+
+  if (parentDirs.size === 0) return;
+
+  localFolderWatcher = chokidar.watch(Array.from(parentDirs), { 
+    depth: 0, 
+    ignoreInitial: true,
+    disableGlobbing: true
+  });
+
+  localFolderWatcher.on('all', (event, filePath) => {
+    if (event === 'addDir' || event === 'rename') {
+      try {
+        const stat = fs.statSync(filePath);
+        for (const [id, data] of trackedFolders.entries()) {
+          if (data.inode === stat.ino && data.path !== filePath) {
+            // Found a rename!
+            const newName = path.basename(filePath);
+            data.path = filePath;
+            data.name = newName;
+            mainWindow.webContents.send('local:folder-renamed', { id, newPath: filePath, newName });
+          }
+        }
+      } catch (e) {}
+    } else if (event === 'unlinkDir') {
+      for (const [id, data] of trackedFolders.entries()) {
+        if (data.path === filePath) {
+          mainWindow.webContents.send('local:folder-missing', { id, path: filePath });
+        }
+      }
+    }
+  });
+});
+
+
+ipcMain.handle('local:pick-image', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    title: '选择头像图片',
+    filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] }]
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+const SCAN_MIME_MAP = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/avi', '.mkv': 'video/x-matroska', '.webm': 'video/webm',
+  '.pdf': 'application/pdf', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.zip': 'application/zip', '.rar': 'application/x-rar', '.7z': 'application/x-7z-compressed',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.psd': 'image/vnd.adobe.photoshop', '.ai': 'application/postscript',
+  '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
+};
+const SCAN_MAX_FILES = 50000;
+
+ipcMain.handle('local:scan-folder', async (_event, folderPath) => {
+  try {
+    if (!folderPath || !fs.existsSync(folderPath)) return [];
+    const results = [];
+    const fsP = require('fs').promises;
+    const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '__pycache__', '.Trash', '.Spotlight-V100', '.fseventsd', 'Library', '.cache', '$RECYCLE.BIN', 'System Volume Information']);
+
+    // Async walk with yielding to prevent blocking
+    const walk = async (dir, relPath) => {
+      let entries;
+      try { entries = await fsP.readdir(dir, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) {
+        if (results.length >= SCAN_MAX_FILES) return;
+        if (entry.name.startsWith('.')) continue;
+        const fullPath = path.join(dir, entry.name);
+        const rel = relPath ? `${relPath}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          if (SKIP_DIRS.has(entry.name)) continue; // 跳过垃圾目录
+          await walk(fullPath, rel);
+        } else {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (!SCAN_MIME_MAP[ext]) continue; // 只扫描已知媒体/文档类型
+          try {
+            const stat = await fsP.stat(fullPath);
+            results.push({
+              id: fullPath,
+              name: entry.name,
+              path: fullPath,
+              relPath: rel,
+              size: stat.size,
+              modifiedTime: stat.mtime.toISOString(),
+              updatedAt: stat.mtimeMs,
+              createdAt: stat.birthtimeMs,
+              mimeType: SCAN_MIME_MAP[ext] || 'application/octet-stream',
+              isLocal: true
+            });
+          } catch { /* skip unreadable */ }
+        }
+        // Yield every 500 files + send progress
+        if (results.length % 200 === 0) {
+          await new Promise(r => setImmediate(r));
+          if (mainWindow?.webContents) {
+            mainWindow.webContents.send('local:scan-progress', { folder: folderPath, count: results.length });
+          }
+        }
+      }
+    };
+    await walk(folderPath, '');
+    console.log(`[LocalScan] 扫描完成: ${folderPath} → ${results.length} 个文件`);
+    return results;
+  } catch (error) {
+    console.error('[UploadOrganizer] 扫描本地文件夹失败:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('local:thumbnail', async (_event, filePath, size) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    const ext = path.extname(filePath).toLowerCase();
+    const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+    if (imageExts.includes(ext)) {
+      // 直接返回 file:// URL 供渲染进程使用
+      return 'file://' + encodeURI(filePath).replace(/#/g, '%23');
+    }
+    return null; // 非图片返回 null，由前端显示文件类型图标
+  } catch (e) {
+    return null;
+  }
+});
+
+// 获取不重名的目标路径（自动追加序号）
+function getUniqueDestPath(targetDir, baseName) {
+  let destPath = path.join(targetDir, baseName);
+  if (!fs.existsSync(destPath)) return destPath;
+  const ext = path.extname(baseName);
+  const nameOnly = path.basename(baseName, ext);
+  let counter = 1;
+  while (fs.existsSync(destPath)) {
+    destPath = path.join(targetDir, `${nameOnly} (${counter})${ext}`);
+    counter++;
+  }
+  return destPath;
+}
+
+ipcMain.handle('local:copy-to-folder', async (_event, filePath, targetDir) => {
+  try {
+    if (!filePath || !targetDir) return { success: false, error: '缺少参数' };
+    if (!fs.existsSync(filePath)) return { success: false, error: '源文件不存在' };
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const destPath = getUniqueDestPath(targetDir, path.basename(filePath));
+    fs.copyFileSync(filePath, destPath);
+    return { success: true, destPath };
+  } catch (error) {
+    console.error('[LocalOrg] 复制文件失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('local:move-to-folder', async (_event, filePath, targetDir) => {
+  try {
+    if (!filePath || !targetDir) return { success: false, error: '缺少参数' };
+    if (!fs.existsSync(filePath)) return { success: false, error: '源文件不存在' };
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    const srcStat = fs.statSync(filePath);
+    const srcSize = srcStat.size;
+    const destPath = getUniqueDestPath(targetDir, path.basename(filePath));
+    try {
+      // Same-volume rename is atomic and safe
+      fs.renameSync(filePath, destPath);
+    } catch (renameErr) {
+      // Cross-volume fallback: copy then verify before delete
+      fs.copyFileSync(filePath, destPath);
+      // Safety check: verify destination exists and size matches
+      if (!fs.existsSync(destPath)) {
+        console.error('[LocalOrg] 安全校验失败: 目标文件不存在', destPath);
+        return { success: false, error: '复制后目标文件不存在，已保留源文件' };
+      }
+      const destStat = fs.statSync(destPath);
+      if (destStat.size !== srcSize) {
+        // Size mismatch — do NOT delete source, remove broken dest
+        console.error(`[LocalOrg] 安全校验失败: 大小不一致 src=${srcSize} dest=${destStat.size}`);
+        try { fs.unlinkSync(destPath); } catch (_) {}
+        return { success: false, error: `文件大小校验失败 (${srcSize} vs ${destStat.size})，已保留源文件` };
+      }
+      // Verified — safe to delete source
+      fs.unlinkSync(filePath);
+      console.log(`[LocalOrg] 跨卷移动成功 (${srcSize} bytes): ${path.basename(filePath)}`);
+    }
+    return { success: true, destPath };
+  } catch (error) {
+    console.error('[LocalOrg] 移动文件失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 本地整理 — 在源文件夹中新建子文件夹
+ipcMain.handle('local:create-folder', async (_event, parentDir, folderName) => {
+  try {
+    if (!parentDir || !folderName) return { success: false, error: '缺少参数' };
+    if (!fs.existsSync(parentDir)) return { success: false, error: '父目录不存在' };
+    // Sanitize folder name
+    const safeName = folderName.replace(/[<>:"/\\|?*]/g, '_').trim();
+    if (!safeName) return { success: false, error: '文件夹名称无效' };
+    const newPath = path.join(parentDir, safeName);
+    if (fs.existsSync(newPath)) return { success: false, error: '该文件夹已存在' };
+    fs.mkdirSync(newPath, { recursive: true });
+    console.log(`[LocalOrg] 新建文件夹: ${newPath}`);
+    return { success: true, path: newPath, name: safeName };
+  } catch (error) {
+    console.error('[LocalOrg] 新建文件夹失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 本地整理 — 导出预设
+ipcMain.handle('local:export-preset', async (_event, jsonStr) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      title: '导出本地整理预设',
+      defaultPath: `本地整理预设_${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+    });
+    if (canceled || !filePath) return { success: false, canceled: true };
+    fs.writeFileSync(filePath, jsonStr, 'utf-8');
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('[LocalOrg] 导出预设失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 本地整理 — 导入预设
+ipcMain.handle('local:import-preset', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      title: '导入本地整理预设',
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths?.length) return { success: false, canceled: true };
+    const content = fs.readFileSync(filePaths[0], 'utf-8');
+    return { success: true, content, filePath: filePaths[0] };
+  } catch (error) {
+    console.error('[LocalOrg] 导入预设失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 本地整理 — 批量导入多个预设（合并）
+ipcMain.handle('local:import-presets-multi', async () => {
+  try {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      title: '选择要合并的预设文件（可多选）',
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (canceled || !filePaths?.length) return { success: false, canceled: true };
+    const results = [];
+    for (const fp of filePaths) {
+      try {
+        const content = fs.readFileSync(fp, 'utf-8');
+        results.push({ content, filePath: fp, error: null });
+      } catch (err) {
+        results.push({ content: null, filePath: fp, error: err.message });
+      }
+    }
+    return { success: true, files: results };
+  } catch (error) {
+    console.error('[LocalOrg] 批量导入预设失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+// 上传分拣器 — 上传文件到 Google Drive
+ipcMain.handle('upload-organizer:upload', async (_event, payload) => {
+  try {
+    const { files, folderId } = payload;
+    if (!files?.length || !folderId) return { success: false, error: '缺少参数' };
+    const token = await googleService.getAccessToken();
+    if (!token?.token) return { success: false, error: '未登录 Google' };
+
+    const results = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // 广播进度
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('upload-organizer:progress', {
+            current: i + 1, total: files.length, fileName: file.name, status: 'uploading'
+          });
+        }
+      });
+
+      try {
+        const filePath = file.path;
+        if (!fs.existsSync(filePath)) {
+          results.push({ name: file.name, success: false, error: '文件不存在' });
+          continue;
+        }
+        const fileBuffer = fs.readFileSync(filePath);
+        const metadata = { name: file.name, parents: [folderId] };
+        const boundary = '-------314159265358979323846';
+        const delimiter = `\r\n--${boundary}\r\n`;
+        const closeDelim = `\r\n--${boundary}--`;
+        const body = Buffer.concat([
+          Buffer.from(delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter + 'Content-Type: ' + (file.mimeType || 'application/octet-stream') + '\r\nContent-Transfer-Encoding: base64\r\n\r\n'),
+          Buffer.from(fileBuffer.toString('base64')),
+          Buffer.from(closeDelim)
+        ]);
+
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token.token}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`
+          },
+          body
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          results.push({ name: file.name, success: true, driveFileId: data.id });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          results.push({ name: file.name, success: false, error: err?.error?.message || `HTTP ${res.status}` });
+        }
+      } catch (e) {
+        results.push({ name: file.name, success: false, error: e.message });
+      }
+    }
+
+    // 最终进度
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('upload-organizer:progress', {
+          current: files.length, total: files.length, status: 'done',
+          results
+        });
+      }
+    });
+
+    return { success: true, results };
+  } catch (error) {
+    console.error('[UploadOrganizer] 上传失败:', error);
+    return { success: false, error: error.message };
   }
 });
 
