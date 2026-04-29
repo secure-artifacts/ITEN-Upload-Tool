@@ -27851,7 +27851,7 @@ function showMultiBatchProgressOverlay(action, totalCount, targetStatus = '') {
   overlay.innerHTML = `
     <div class="multi-batch-progress-modal">
       <div class="multi-batch-progress-spinner"></div>
-      <div class="multi-batch-progress-title">${actionName}中...</div>
+      <div class="multi-batch-progress-title">${escapeHtml(actionName)}中...</div>
       <div class="multi-batch-progress-detail">正在处理 0 / ${totalCount} 个批次</div>
       <div class="multi-batch-progress-bar">
         <div class="multi-batch-progress-fill" style="width: 0%"></div>

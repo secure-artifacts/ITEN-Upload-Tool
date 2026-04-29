@@ -493,7 +493,7 @@
       const totalTasks = parsed.reduce((s,a) => s + a.tasks.length, 0);
       result.className = 'tp-batch-parse-result';
       result.innerHTML = `✅ 识别到 ${parsed.length} 个账号, ${totalTasks} 条任务<table class="tp-batch-preview-table"><tr><th>管理员</th><th>类型</th><th>账号</th><th>链接</th><th>任务</th></tr>${parsed.map(a =>
-        `<tr><td>${u.esc(a.admin)}</td><td>${a.type}</td><td>${u.esc(a.name)}</td><td>${a.link?'✅':'—'}</td><td>${a.tasks.map(t=>`${t.taskType}×${t.dailyQuantity}`).join(', ')}</td></tr>`
+        `<tr><td>${u.esc(a.admin)}</td><td>${u.esc(a.type)}</td><td>${u.esc(a.name)}</td><td>${a.link?'✅':'—'}</td><td>${a.tasks.map(t=>`${u.esc(t.taskType)}×${t.dailyQuantity}`).join(', ')}</td></tr>`
       ).join('')}</table>`;
       u.qs('#tp-batch-import',panel).disabled = false;
     };

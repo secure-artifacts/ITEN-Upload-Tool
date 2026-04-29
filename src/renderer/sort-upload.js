@@ -2596,8 +2596,15 @@
       });
       urlInput.addEventListener('change', () => {
         const src = parseImageFormula(urlInput.value);
-        if (src) { dropArea.innerHTML = `<img class="su-avatar-preview" src="${src}" />`; }
-        else { dropArea.innerHTML = '<span class="su-avatar-placeholder-btn">＋</span>'; }
+        if (src) {
+          dropArea.innerHTML = '';
+          const img = document.createElement('img');
+          img.className = 'su-avatar-preview';
+          img.src = src;
+          dropArea.appendChild(img);
+        } else {
+          dropArea.innerHTML = '<span class="su-avatar-placeholder-btn">＋</span>';
+        }
       });
     });
 
